@@ -1,0 +1,4 @@
+mode,avg_duplicates,avg_propagation_time,runs
+gossip,4,4.85,10
+cluster,0,4.85,10
+ahbn,2,4.85,10

@@ -1,0 +1,112 @@
+{
+  "clusters": {
+    "C1": [
+      "N1",
+      "N2",
+      "N3"
+    ],
+    "C2": [
+      "N4",
+      "N5",
+      "N6"
+    ]
+  },
+  "nodes": {
+    "N1": {
+      "cluster_id": "C1",
+      "role": "CH",
+      "neighbors": [
+        "N2",
+        "N3",
+        "N4"
+      ],
+      "gateway_peers": [
+        "N4"
+      ]
+    },
+    "N2": {
+      "cluster_id": "C1",
+      "role": "member",
+      "neighbors": [
+        "N1",
+        "N3"
+      ],
+      "cluster_head": "N1"
+    },
+    "N3": {
+      "cluster_id": "C1",
+      "role": "member",
+      "neighbors": [
+        "N1",
+        "N2"
+      ],
+      "cluster_head": "N1"
+    },
+    "N4": {
+      "cluster_id": "C2",
+      "role": "CH",
+      "neighbors": [
+        "N5",
+        "N6",
+        "N1"
+      ],
+      "gateway_peers": [
+        "N1"
+      ]
+    },
+    "N5": {
+      "cluster_id": "C2",
+      "role": "member",
+      "neighbors": [
+        "N4",
+        "N6"
+      ],
+      "cluster_head": "N4"
+    },
+    "N6": {
+      "cluster_id": "C2",
+      "role": "member",
+      "neighbors": [
+        "N4",
+        "N5"
+      ],
+      "cluster_head": "N4"
+    }
+  },
+  "link_delays": {
+    "N1": {
+      "N2": 1.0,
+      "N3": 1.1,
+      "N4": 1.4
+    },
+    "N2": {
+      "N1": 1.0,
+      "N3": 0.9
+    },
+    "N3": {
+      "N1": 1.1,
+      "N2": 0.9
+    },
+    "N4": {
+      "N5": 1.0,
+      "N6": 1.2,
+      "N1": 1.4
+    },
+    "N5": {
+      "N4": 1.0,
+      "N6": 0.8
+    },
+    "N6": {
+      "N4": 1.2,
+      "N5": 0.8
+    }
+  },
+  "processing_delay": {
+    "N1": 0.6,
+    "N2": 0.05,
+    "N3": 0.05,
+    "N4": 0.6,
+    "N5": 0.05,
+    "N6": 0.05
+  }
+}

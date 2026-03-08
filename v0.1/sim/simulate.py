@@ -1,4 +1,5 @@
-
+from topology_generator import generate_topology
+import random
 import heapq, json, csv
 from message import Message
 from node import Node
@@ -42,9 +43,49 @@ class Simulation:
         time=max(n.first_receive_time or 0 for n in self.nodes.values())
         return reached,dup,time
 
-def load():
-    with open("topology.json") as f:
-        return json.load(f)
+# def load():
+def load(num_nodes):
+    # with open("topology.json") as f:
+    #     return json.load(f)
+    return generate_topology(num_nodes=num_nodes, clusters=2)
+
+def main():
+
+    NUM_NODES = 50   # change to 10, 20, 100 later
+    RUNS = 10
+
+    topo = load(NUM_NODES)
+
+    modes = ["gossip", "cluster", "ahbn"]
+
+    results = {m: {"dup": [], "time": []} for m in modes}
+
+    for r in range(RUNS):
+
+        origin = random.choice(list(topo["nodes"].keys()))
+
+        print(f"\nRun {r+1} origin={origin}")
+
+        for m in modes:
+
+            sim = Simulation(topo, m)
+
+            reached, dup, t = sim.run(origin, f"TX{r}")
+
+            results[m]["dup"].append(dup)
+            results[m]["time"].append(t)
+
+            print(m, "duplicates:", dup, "time:", round(t,3))
+
+    print("\nAVERAGE RESULTS")
+
+    for m in modes:
+
+        avg_dup = sum(results[m]["dup"]) / RUNS
+        avg_time = sum(results[m]["time"]) / RUNS
+
+        print(m, "avg duplicates:", round(avg_dup,2),
+                 "avg time:", round(avg_time,2))
 
 # def main():
 #     topo=load()
@@ -66,68 +107,68 @@ def load():
 #     for r in rows:
 #         print(r)
 
-def main():
+# def main():
 
-    topo = load()
+#     topo = load()
 
-    modes = ["gossip", "cluster", "ahbn"]
+#     modes = ["gossip", "cluster", "ahbn"]
 
-    RUNS = 10   # change this to 20 or 50 later
+#     RUNS = 10   # change this to 20 or 50 later
 
-    results = {mode: {"duplicates": [], "time": []} for mode in modes}
+#     results = {mode: {"duplicates": [], "time": []} for mode in modes}
 
-    for i in range(RUNS):
+#     for i in range(RUNS):
 
-        print(f"\nRun {i+1}")
+#         print(f"\nRun {i+1}")
 
-        for mode in modes:
+#         for mode in modes:
 
-            sim = Simulation(topo, mode)
+#             sim = Simulation(topo, mode)
 
-            r, d, t = sim.run("N2", f"TX{i}")
+#             r, d, t = sim.run("N2", f"TX{i}")
 
-            results[mode]["duplicates"].append(d)
-            results[mode]["time"].append(t)
+#             results[mode]["duplicates"].append(d)
+#             results[mode]["time"].append(t)
 
-            print(mode, "duplicates:", d, "time:", t)
+#             print(mode, "duplicates:", d, "time:", t)
 
-    os.makedirs("results", exist_ok=True)
+#     os.makedirs("results", exist_ok=True)
 
-    with open("results/summary.csv", "w", newline="") as f:
+#     with open("results/summary.csv", "w", newline="") as f:
 
-        writer = csv.writer(f)
+#         writer = csv.writer(f)
 
-        writer.writerow([
-            "mode",
-            "avg_duplicates",
-            "avg_propagation_time",
-            "runs"
-        ])
+#         writer.writerow([
+#             "mode",
+#             "avg_duplicates",
+#             "avg_propagation_time",
+#             "runs"
+#         ])
 
-        for mode in modes:
+#         for mode in modes:
 
-            avg_dup = statistics.mean(results[mode]["duplicates"])
-            avg_time = statistics.mean(results[mode]["time"])
+#             avg_dup = statistics.mean(results[mode]["duplicates"])
+#             avg_time = statistics.mean(results[mode]["time"])
 
-            writer.writerow([
-                mode,
-                round(avg_dup, 3),
-                round(avg_time, 3),
-                RUNS
-            ])
+#             writer.writerow([
+#                 mode,
+#                 round(avg_dup, 3),
+#                 round(avg_time, 3),
+#                 RUNS
+#             ])
 
-    print("\nAVERAGE RESULTS")
+#     print("\nAVERAGE RESULTS")
 
-    for mode in modes:
+#     for mode in modes:
 
-        avg_dup = statistics.mean(results[mode]["duplicates"])
-        avg_time = statistics.mean(results[mode]["time"])
+#         avg_dup = statistics.mean(results[mode]["duplicates"])
+#         avg_time = statistics.mean(results[mode]["time"])
 
-        print(
-            mode,
-            "avg duplicates:", round(avg_dup, 3),
-            "avg time:", round(avg_time, 3)
-        )
+#         print(
+#             mode,
+#             "avg duplicates:", round(avg_dup, 3),
+#             "avg time:", round(avg_time, 3)
+#         )
 
 if __name__=="__main__":
     main()

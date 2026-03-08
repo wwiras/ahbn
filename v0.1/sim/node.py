@@ -67,7 +67,9 @@ class Node:
         proc=topology["processing_delay"].get(self.node_id,0)
 
         for t in targets:
-            delay=topology["link_delays"][self.node_id][t]+proc
+            # delay=topology["link_delays"][self.node_id][t]+proc
+            base_delay = topology["link_delays"].get(self.node_id, {}).get(t, 1.0)
+            delay = base_delay + proc
             fwd=msg.copy_for_forward(self.node_id)
             events.append((time+delay,t,fwd,self.node_id))
 

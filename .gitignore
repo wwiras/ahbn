@@ -58,6 +58,8 @@ __pycache__
 
 # DS_Store
 .DS_Store
+v0.1/.DS_Store
+v0.2/.DS_Store
 
 # results
 results

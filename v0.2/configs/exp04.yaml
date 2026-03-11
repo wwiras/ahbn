@@ -1,0 +1,11 @@
+experiment_id: exp04_chfailure_baseline
+
+protocol: cluster
+
+node_counts: [100]
+
+ch_counts: [4]
+
+runs_per_setting: 10
+
+scenarios: ["normal","overload","failure"]

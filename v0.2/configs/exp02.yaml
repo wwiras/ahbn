@@ -1,0 +1,13 @@
+experiment_id: exp02_chcount_baseline
+
+protocol: cluster
+
+node_counts: [50,100,200]
+
+ch_counts: [2,4,6,8]
+
+runs_per_setting: 10
+
+ba_m_values: [2]
+
+scenarios: ["normal"]

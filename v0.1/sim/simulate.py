@@ -51,8 +51,8 @@ def load(num_nodes):
 
 def main():
 
-    NUM_NODES = 50   # change to 10, 20, 100 later
-    RUNS = 10
+    NUM_NODES = 100   # change to 10, 20, 100 later
+    RUNS = 200
 
     topo = load(NUM_NODES)
 
@@ -77,7 +77,7 @@ def main():
 
             print(m, "duplicates:", dup, "time:", round(t,3))
 
-    print("\nAVERAGE RESULTS")
+    print(f"\nAVERAGE RESULTS for Number of Nodes:{NUM_NODES} and Runs:{RUNS}")
 
     for m in modes:
 

@@ -1,0 +1,11 @@
+experiment_id: exp03_topology_baseline
+
+protocol: gossip
+
+node_counts: [100]
+
+ba_m_values: [1,2,3,4,5,6]
+
+runs_per_setting: 10
+
+scenarios: ["normal"]

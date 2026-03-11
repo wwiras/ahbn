@@ -1,0 +1,11 @@
+experiment_id: exp09_dense_topology_all
+
+protocols: [gossip, cluster, ahbn]
+
+node_counts: [100]
+
+ba_m_values: [1,2,3,4,5,6]
+
+runs_per_setting: 10
+
+scenarios: ["normal"]

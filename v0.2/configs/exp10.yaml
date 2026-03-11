@@ -1,0 +1,11 @@
+experiment_id: exp10_failure_overload_all
+
+protocols: [gossip, cluster, ahbn]
+
+node_counts: [100]
+
+ch_counts: [4]
+
+runs_per_setting: 20
+
+scenarios: ["normal","overload","failure"]

@@ -1,14 +1,14 @@
 # AHBN Experimental Roadmap
 
 ## Stage A: Highest-Value Baseline Analysis
-*These give the strongest supervisor-facing evidence quickly.*
+
 
 ### 1. Experiment 1: Fanout vs. Duplication
 * **Why first:** Directly motivates AHBN adaptive fanout.
 * **Purpose:** Prove duplicate explosion in gossip.
 * **Metrics:** Duplicate ratio, transmissions, propagation time, delivery ratio.
 * **Anticipation:** Duplicates grow sharply; delay improves only modestly.
-* **Output:** Strongest early graph for supervisor.
+* **Output:** Strongest early graph.
 
 ### 2. Experiment 2: CH Count vs. Node Count
 * **Why second:** Proves static clustering is sensitive and brittle.

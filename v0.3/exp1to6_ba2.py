@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import os
 import sys
+import math
 import random
 from datetime import datetime
 from collections import defaultdict, deque
@@ -338,6 +339,222 @@ class BASimulator:
 
         return self.make_result("cluster", g, informed, source, active, rounds, transmissions, duplicates)
 
+    # -------------------------------------------------------------------------
+    # Enhanced Exp 2 helpers
+    # -------------------------------------------------------------------------
+
+    def assign_clusters_fixed(
+        self,
+        node_count: int,
+        ch_count: int,
+    ) -> Tuple[List[int], Dict[int, List[int]], Dict[int, int]]:
+        all_nodes = list(range(node_count))
+        ch_nodes = list(range(ch_count))
+
+        members_by_ch: Dict[int, List[int]] = {ch: [] for ch in ch_nodes}
+        node_to_ch: Dict[int, int] = {}
+
+        member_nodes = [n for n in all_nodes if n not in ch_nodes]
+        for idx, node in enumerate(member_nodes):
+            ch = ch_nodes[idx % ch_count]
+            members_by_ch[ch].append(node)
+            node_to_ch[node] = ch
+
+        for ch in ch_nodes:
+            node_to_ch[ch] = ch
+
+        return ch_nodes, members_by_ch, node_to_ch
+
+    def build_sparse_ch_overlay_fixed(
+        self,
+        ch_nodes: List[int],
+        target_degree: int = 2,
+    ) -> Dict[int, Set[int]]:
+        overlay: Dict[int, Set[int]] = {ch: set() for ch in ch_nodes}
+        c = len(ch_nodes)
+
+        if c <= 1:
+            return overlay
+
+        for i in range(c):
+            a = ch_nodes[i]
+            b = ch_nodes[(i + 1) % c]
+            overlay[a].add(b)
+            overlay[b].add(a)
+
+        for ch in ch_nodes:
+            while len(overlay[ch]) < min(target_degree, c - 1):
+                other = self.rng.choice(ch_nodes)
+                if other != ch:
+                    overlay[ch].add(other)
+                    overlay[other].add(ch)
+
+        return overlay
+
+    def build_intra_cluster_graph_fixed(
+        self,
+        ch: int,
+        members: List[int],
+        member_degree: int = 2,
+    ) -> Dict[int, Set[int]]:
+        nodes = [ch] + members
+        g: Dict[int, Set[int]] = {n: set() for n in nodes}
+
+        if not members:
+            return g
+
+        seeds = members[:max(1, min(len(members), member_degree))]
+        for m in seeds:
+            g[ch].add(m)
+            g[m].add(ch)
+
+        if len(members) > 1:
+            for i in range(len(members)):
+                a = members[i]
+                b = members[(i + 1) % len(members)]
+                g[a].add(b)
+                g[b].add(a)
+
+        for m in members:
+            while len([x for x in g[m] if x != ch]) < min(member_degree, max(0, len(members) - 1)):
+                other = self.rng.choice(members)
+                if other != m:
+                    g[m].add(other)
+                    g[other].add(m)
+
+        return g
+
+    def run_cluster_fixed_exp2(
+        self,
+        g: nx.Graph,
+        source: int = 0,
+        ch_count: int = 4,
+        ch_service_limit: Optional[int] = None,
+        ch_overlay_degree: int = 2,
+        member_degree: int = 2,
+        member_forward_limit: int = 2,
+        transmission_success_prob: float = 1.0,
+        max_rounds: int = 100,
+    ) -> Tuple[SimulationResult, float]:
+        node_count = g.number_of_nodes()
+
+        ch_nodes, members_by_ch, node_to_ch = self.assign_clusters_fixed(node_count=node_count, ch_count=ch_count)
+        ch_overlay = self.build_sparse_ch_overlay_fixed(ch_nodes, target_degree=ch_overlay_degree)
+
+        cluster_graphs = {
+            ch: self.build_intra_cluster_graph_fixed(ch, members_by_ch[ch], member_degree=member_degree)
+            for ch in ch_nodes
+        }
+
+        if ch_service_limit is None:
+            avg_cluster_size = (node_count - ch_count) / ch_count if ch_count > 0 else 0
+            # stricter than before so few-CH cases become more overloaded
+            ch_service_limit = max(1, math.ceil(math.log2(max(2, avg_cluster_size + 1))))
+
+        informed: Set[int] = {source}
+        active: Set[int] = set(g.nodes())
+
+        seen_edges: Set[Tuple[int, int]] = set()
+        rounds = 0
+        transmissions = 0
+        duplicates = 0
+
+        pending_by_sender: Dict[int, deque] = defaultdict(deque)
+        source_ch = node_to_ch[source]
+
+        if source != source_ch:
+            pending_by_sender[source].append(source_ch)
+        else:
+            # usually source should not be CH in Exp 2, but keep safe fallback
+            for nb in ch_overlay[source]:
+                pending_by_sender[source].append(nb)
+            for nb in cluster_graphs[source][source]:
+                pending_by_sender[source].append(nb)
+
+        while rounds < max_rounds:
+            rounds += 1
+            activated_this_round: Set[int] = set()
+
+            active_senders = list(pending_by_sender.keys())
+            if not active_senders:
+                break
+
+            new_pending: Dict[int, deque] = defaultdict(deque)
+
+            for sender in active_senders:
+                sender_is_ch = sender in ch_nodes
+                limit = ch_service_limit if sender_is_ch else member_forward_limit
+                served = 0
+
+                while pending_by_sender[sender] and served < limit:
+                    receiver = pending_by_sender[sender].popleft()
+                    served += 1
+
+                    edge = (sender, receiver)
+                    if edge in seen_edges:
+                        duplicates += 1
+                    seen_edges.add(edge)
+
+                    transmissions += 1
+
+                    if self.rng.random() > transmission_success_prob:
+                        continue
+
+                    was_new = receiver not in informed
+                    if receiver in informed:
+                        duplicates += 1
+                    else:
+                        informed.add(receiver)
+                        activated_this_round.add(receiver)
+
+                    if was_new:
+                        receiver_ch = node_to_ch[receiver]
+
+                        if receiver in ch_nodes:
+                            # prioritize overlay first, then local cluster spread
+                            overlay_neighs = list(ch_overlay[receiver])
+                            local_neighs = list(cluster_graphs[receiver][receiver])
+                            self.rng.shuffle(overlay_neighs)
+                            self.rng.shuffle(local_neighs)
+
+                            for nb in overlay_neighs:
+                                new_pending[receiver].append(nb)
+                            for nb in local_neighs:
+                                new_pending[receiver].append(nb)
+
+                        else:
+                            local_graph = cluster_graphs[receiver_ch]
+                            neighs = list(local_graph[receiver])
+                            self.rng.shuffle(neighs)
+                            for nb in neighs:
+                                new_pending[receiver].append(nb)
+
+                            if receiver_ch not in informed:
+                                new_pending[receiver].append(receiver_ch)
+
+                while pending_by_sender[sender]:
+                    new_pending[sender].append(pending_by_sender[sender].popleft())
+
+            pending_by_sender = new_pending
+
+            if not activated_this_round and not pending_by_sender:
+                break
+
+            if len(informed) == node_count:
+                break
+
+        result = self.make_result(
+            protocol="cluster_fixed",
+            g=g,
+            informed=informed,
+            source=source,
+            active=active,
+            rounds=rounds,
+            transmissions=transmissions,
+            duplicates=duplicates,
+        )
+        return result, float(ch_service_limit)
+
 
 # -----------------------------------------------------------------------------
 # Utility functions
@@ -375,6 +592,7 @@ def summarize_results(experiment_id: int, extra: Dict, results: List[SimulationR
     return {
         "experiment": experiment_id,
         **extra,
+        "runs": len(results),
         "avg_rounds": round(mean_of(results, "rounds"), 4),
         "avg_transmissions": round(mean_of(results, "transmissions"), 4),
         "avg_duplicates": round(mean_of(results, "duplicates"), 4),
@@ -391,7 +609,7 @@ def summarize_results(experiment_id: int, extra: Dict, results: List[SimulationR
 # Experiments
 # -----------------------------------------------------------------------------
 
-def experiment_1_fanout_vs_duplication(out_dir: str, runs: int = RUNS) -> List[dict]:
+def experiment_1_fanout_vs_duplication(out_dir: str, runs: int = RUNS, base_seed: int = BASE_SEED) -> List[dict]:
     title = "Fanout vs Duplication"
     out_file = os.path.join(out_dir, "exp1_fanout_vs_duplication.csv")
     log_exp_start(1, title)
@@ -403,7 +621,7 @@ def experiment_1_fanout_vs_duplication(out_dir: str, runs: int = RUNS) -> List[d
     for fanout in [1, 2, 3, 4, 5, 6, 8]:
         run_results = []
         for i in range(runs):
-            seed = BASE_SEED + i
+            seed = base_seed + i
             sim = BASimulator(seed)
             g = sim.build_ba_graph(node_count=node_count, ba_m=ba_m)
             res = sim.run_gossip(g=g, source=0, fanout=fanout)
@@ -418,38 +636,97 @@ def experiment_1_fanout_vs_duplication(out_dir: str, runs: int = RUNS) -> List[d
     return rows
 
 
-def experiment_2_ch_count_vs_node_count(out_dir: str, runs: int = RUNS) -> List[dict]:
+def experiment_2_ch_count_vs_node_count(out_dir: str, runs: int = RUNS, base_seed: int = BASE_SEED) -> List[dict]:
     title = "CH Count vs Node Count"
     out_file = os.path.join(out_dir, "exp2_ch_count_vs_node_count.csv")
     log_exp_start(2, title)
 
     rows: List[dict] = []
 
-    for node_count in [50, 100, 200, 300, 400]:
+    for node_count in [30, 50, 100]:
         ba_m = 3
-        ch_options = sorted(set([2, 4, 6, 8, max(2, node_count // 20), max(2, node_count // 10)]))
-        ch_options = [c for c in ch_options if c < node_count]
+        ch_options = [2, 4, 6, 8, 10, 12]
+        ch_options = [c for c in ch_options if 1 < c < node_count]
+
+        # targeted remodification:
+        # - source is not CH
+        # - smaller deadline so delivery is meaningful
+        # - harsher settings for small-node case
+        source_node = node_count - 1
+        max_rounds = max(6, math.ceil(math.log2(node_count)) * 2)
+
+        if node_count <= 30:
+            ch_overlay_degree = 1
+            member_degree = 1
+            member_forward_limit = 1
+            transmission_success_prob = 0.95
+        elif node_count <= 50:
+            ch_overlay_degree = 2
+            member_degree = 1
+            member_forward_limit = 1
+            transmission_success_prob = 0.95
+        else:
+            ch_overlay_degree = 2
+            member_degree = 2
+            member_forward_limit = 2
+            transmission_success_prob = 0.95
+
+        log(
+            f"Exp 2 node_count={node_count} ongoing "
+            f"(source={source_node}, max_rounds={max_rounds}, "
+            f"overlay_deg={ch_overlay_degree}, member_deg={member_degree}, "
+            f"member_fwd={member_forward_limit}, success_prob={transmission_success_prob})"
+        )
 
         for ch_count in ch_options:
             run_results = []
+            service_limits: List[float] = []
+
             for i in range(runs):
-                seed = BASE_SEED + i
+                seed = base_seed + i
                 sim = BASimulator(seed)
                 g = sim.build_ba_graph(node_count=node_count, ba_m=ba_m)
-                chs, node_to_ch = sim.derive_clusters_from_graph(g, ch_count=ch_count)
-                res = sim.run_cluster(g=g, cluster_heads=chs, node_to_ch=node_to_ch, source=0)
-                run_results.append(res)
 
-            rows.append(
-                summarize_results(2, {"node_count": node_count, "ch_count": ch_count, "ba_m": ba_m}, run_results)
+                res, used_limit = sim.run_cluster_fixed_exp2(
+                    g=g,
+                    source=source_node,
+                    ch_count=ch_count,
+                    ch_service_limit=None,
+                    ch_overlay_degree=ch_overlay_degree,
+                    member_degree=member_degree,
+                    member_forward_limit=member_forward_limit,
+                    transmission_success_prob=transmission_success_prob,
+                    max_rounds=max_rounds,
+                )
+                run_results.append(res)
+                service_limits.append(used_limit)
+
+            row = summarize_results(
+                2,
+                {
+                    "node_count": node_count,
+                    "ch_count": ch_count,
+                    "ba_m": ba_m,
+                    "source_node": source_node,
+                    "max_rounds_used": max_rounds,
+                    "ch_overlay_degree": ch_overlay_degree,
+                    "member_degree": member_degree,
+                    "member_forward_limit": member_forward_limit,
+                    "transmission_success_prob": transmission_success_prob,
+                    "ch_service_limit_used": round(sum(service_limits) / len(service_limits), 4),
+                },
+                run_results,
             )
+            rows.append(row)
+
+        log(f"Exp 2 node_count={node_count} done")
 
     write_csv(out_file, rows)
     log_exp_done(2, title, out_file)
     return rows
 
 
-def experiment_3_topology_density_vs_performance(out_dir: str, runs: int = RUNS) -> List[dict]:
+def experiment_3_topology_density_vs_performance(out_dir: str, runs: int = RUNS, base_seed: int = BASE_SEED) -> List[dict]:
     title = "Topology Density vs Performance"
     out_file = os.path.join(out_dir, "exp3_topology_density_vs_performance.csv")
     log_exp_start(3, title)
@@ -461,7 +738,7 @@ def experiment_3_topology_density_vs_performance(out_dir: str, runs: int = RUNS)
     for ba_m in [1, 2, 3, 4, 6, 8]:
         run_results = []
         for i in range(runs):
-            seed = BASE_SEED + i
+            seed = base_seed + i
             sim = BASimulator(seed)
             g = sim.build_ba_graph(node_count=node_count, ba_m=ba_m)
             res = sim.run_gossip(g=g, source=0, fanout=fanout)
@@ -476,7 +753,7 @@ def experiment_3_topology_density_vs_performance(out_dir: str, runs: int = RUNS)
     return rows
 
 
-def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS) -> List[dict]:
+def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS, base_seed: int = BASE_SEED) -> List[dict]:
     title = "CH Overload / Failure"
     out_file = os.path.join(out_dir, "exp4_ch_overload_failure.csv")
     log_exp_start(4, title)
@@ -489,7 +766,7 @@ def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS) -> List[dic
     for overload_limit in [None, 20, 10, 5, 2]:
         run_results = []
         for i in range(runs):
-            seed = BASE_SEED + i
+            seed = base_seed + i
             sim = BASimulator(seed)
             g = sim.build_ba_graph(node_count=node_count, ba_m=ba_m)
             chs, node_to_ch = sim.derive_clusters_from_graph(g, ch_count=ch_count)
@@ -520,7 +797,7 @@ def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS) -> List[dic
     for failed_ch_count in [0, 1, 2, 3]:
         run_results = []
         for i in range(runs):
-            seed = BASE_SEED + i
+            seed = base_seed + i
             sim = BASimulator(seed)
             g = sim.build_ba_graph(node_count=node_count, ba_m=ba_m)
             chs, node_to_ch = sim.derive_clusters_from_graph(g, ch_count=ch_count)
@@ -558,7 +835,7 @@ def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS) -> List[dic
     return rows
 
 
-def experiment_5_churn_sensitivity(out_dir: str, runs: int = RUNS) -> List[dict]:
+def experiment_5_churn_sensitivity(out_dir: str, runs: int = RUNS, base_seed: int = BASE_SEED) -> List[dict]:
     title = "Churn Sensitivity"
     out_file = os.path.join(out_dir, "exp5_churn_sensitivity.csv")
     log_exp_start(5, title)
@@ -574,7 +851,7 @@ def experiment_5_churn_sensitivity(out_dir: str, runs: int = RUNS) -> List[dict]
         cluster_runs = []
 
         for i in range(runs):
-            seed = BASE_SEED + i
+            seed = base_seed + i
             sim = BASimulator(seed)
 
             g = sim.build_ba_graph(node_count=node_count, ba_m=ba_m)
@@ -619,7 +896,7 @@ def experiment_5_churn_sensitivity(out_dir: str, runs: int = RUNS) -> List[dict]
     return rows
 
 
-def experiment_6_heterogeneous_resources(out_dir: str, runs: int = RUNS) -> List[dict]:
+def experiment_6_heterogeneous_resources(out_dir: str, runs: int = RUNS, base_seed: int = BASE_SEED) -> List[dict]:
     title = "Heterogeneous Resources"
     out_file = os.path.join(out_dir, "exp6_heterogeneous_resources.csv")
     log_exp_start(6, title)
@@ -633,7 +910,7 @@ def experiment_6_heterogeneous_resources(out_dir: str, runs: int = RUNS) -> List
         run_results = []
 
         for i in range(runs):
-            seed = BASE_SEED + i
+            seed = base_seed + i
             sim = BASimulator(seed)
             g = sim.build_ba_graph(node_count=node_count, ba_m=ba_m)
 
@@ -689,12 +966,12 @@ def main() -> None:
     out_dir = build_results_dirname()
     ensure_new_dir(out_dir)
 
-    exp1 = experiment_1_fanout_vs_duplication(out_dir=out_dir, runs=RUNS)
-    exp2 = experiment_2_ch_count_vs_node_count(out_dir=out_dir, runs=RUNS)
-    exp3 = experiment_3_topology_density_vs_performance(out_dir=out_dir, runs=RUNS)
-    exp4 = experiment_4_ch_overload_failure(out_dir=out_dir, runs=RUNS)
-    exp5 = experiment_5_churn_sensitivity(out_dir=out_dir, runs=RUNS)
-    exp6 = experiment_6_heterogeneous_resources(out_dir=out_dir, runs=RUNS)
+    exp1 = experiment_1_fanout_vs_duplication(out_dir=out_dir, runs=RUNS, base_seed=BASE_SEED)
+    exp2 = experiment_2_ch_count_vs_node_count(out_dir=out_dir, runs=RUNS, base_seed=BASE_SEED)
+    exp3 = experiment_3_topology_density_vs_performance(out_dir=out_dir, runs=RUNS, base_seed=BASE_SEED)
+    exp4 = experiment_4_ch_overload_failure(out_dir=out_dir, runs=RUNS, base_seed=BASE_SEED)
+    exp5 = experiment_5_churn_sensitivity(out_dir=out_dir, runs=RUNS, base_seed=BASE_SEED)
+    exp6 = experiment_6_heterogeneous_resources(out_dir=out_dir, runs=RUNS, base_seed=BASE_SEED)
 
     print_summary("Exp 1 - Fanout vs Duplication", exp1)
     print_summary("Exp 2 - CH Count vs Node Count", exp2)

@@ -139,6 +139,53 @@ def plot_exp2_ch_count_vs_node_count(results_dir: Path, figures_dir: Path) -> No
         plt.grid(True, alpha=0.3)
         save_plot(figures_dir, f"exp2_delivery_nodes_{node_count}.png")
 
+        if "avg_duplicates" in sub.columns:
+            plt.figure(figsize=(8, 5))
+            plt.plot(sub["ch_count"], sub["avg_duplicates"], marker="o")
+            plt.xlabel("Cluster Head Count")
+            plt.ylabel("Average Duplicate Messages")
+            plt.title(f"Exp 2: CH Count vs Duplicates (Nodes={node_count})")
+            plt.grid(True, alpha=0.3)
+            save_plot(figures_dir, f"exp2_duplicates_nodes_{node_count}.png")
+
+        if "avg_duplicate_ratio" in sub.columns:
+            plt.figure(figsize=(8, 5))
+            plt.plot(sub["ch_count"], sub["avg_duplicate_ratio"], marker="o")
+            plt.xlabel("Cluster Head Count")
+            plt.ylabel("Average Duplicate Ratio")
+            plt.title(f"Exp 2: CH Count vs Duplicate Ratio (Nodes={node_count})")
+            plt.grid(True, alpha=0.3)
+            save_plot(figures_dir, f"exp2_duplicate_ratio_nodes_{node_count}.png")
+
+        if "avg_propagation_efficiency" in sub.columns:
+            plt.figure(figsize=(8, 5))
+            plt.plot(sub["ch_count"], sub["avg_propagation_efficiency"], marker="o")
+            plt.xlabel("Cluster Head Count")
+            plt.ylabel("Average Propagation Efficiency")
+            plt.title(f"Exp 2: CH Count vs Propagation Efficiency (Nodes={node_count})")
+            plt.grid(True, alpha=0.3)
+            save_plot(figures_dir, f"exp2_efficiency_nodes_{node_count}.png")
+
+        if "ch_service_limit_used" in sub.columns:
+            plt.figure(figsize=(8, 5))
+            plt.plot(sub["ch_count"], sub["ch_service_limit_used"], marker="o")
+            plt.xlabel("Cluster Head Count")
+            plt.ylabel("CH Service Limit Used")
+            plt.title(f"Exp 2: CH Count vs CH Service Limit (Nodes={node_count})")
+            plt.grid(True, alpha=0.3)
+            save_plot(figures_dir, f"exp2_service_limit_nodes_{node_count}.png")
+
+        if "avg_duplicates" in sub.columns:
+            plt.figure(figsize=(8, 5))
+            plt.plot(sub["avg_duplicates"], sub["avg_rounds"], marker="o")
+            for _, row in sub.iterrows():
+                plt.annotate(f"CH={int(row['ch_count'])}", (row["avg_duplicates"], row["avg_rounds"]))
+            plt.xlabel("Average Duplicate Messages")
+            plt.ylabel("Average Propagation Delay (Rounds)")
+            plt.title(f"Exp 2: CH Trade-off Landscape (Nodes={node_count})")
+            plt.grid(True, alpha=0.3)
+            save_plot(figures_dir, f"exp2_tradeoff_nodes_{node_count}.png")
+
     log_plot_done(name)
 
 
@@ -362,6 +409,40 @@ def plot_exp1_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
     log_plot_done(name)
 
 
+def plot_exp2_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
+    name = "Extra Analysis - Exp 2"
+    log_plot_start(name)
+
+    df = read_csv(results_dir, "exp2_ch_count_vs_node_count.csv").sort_values(["node_count", "ch_count"])
+
+    for node_count in sorted(df["node_count"].unique()):
+        sub = df[df["node_count"] == node_count].sort_values("ch_count")
+
+        if "avg_propagation_efficiency" in sub.columns and "avg_rounds" in sub.columns:
+            plt.figure(figsize=(8, 5))
+            plt.plot(sub["avg_propagation_efficiency"], sub["avg_rounds"], marker="o")
+            for _, row in sub.iterrows():
+                plt.annotate(f"CH={int(row['ch_count'])}", (row["avg_propagation_efficiency"], row["avg_rounds"]))
+            plt.xlabel("Average Propagation Efficiency")
+            plt.ylabel("Average Propagation Delay (Rounds)")
+            plt.title(f"Extra Analysis: Efficiency–Delay Trade-off (Nodes={node_count})")
+            plt.grid(True, alpha=0.3)
+            save_plot(figures_dir, f"extra_exp2_efficiency_delay_tradeoff_nodes_{node_count}.png")
+
+        if "avg_transmissions" in sub.columns and "avg_delivery_ratio" in sub.columns:
+            plt.figure(figsize=(8, 5))
+            plt.plot(sub["avg_transmissions"], sub["avg_delivery_ratio"], marker="o")
+            for _, row in sub.iterrows():
+                plt.annotate(f"CH={int(row['ch_count'])}", (row["avg_transmissions"], row["avg_delivery_ratio"]))
+            plt.xlabel("Average Transmissions")
+            plt.ylabel("Average Delivery Ratio")
+            plt.title(f"Extra Analysis: Cost–Coverage Trade-off (Nodes={node_count})")
+            plt.grid(True, alpha=0.3)
+            save_plot(figures_dir, f"extra_exp2_cost_coverage_tradeoff_nodes_{node_count}.png")
+
+    log_plot_done(name)
+
+
 def plot_exp3_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
     name = "Extra Analysis - Exp 3"
     log_plot_start(name)
@@ -475,6 +556,7 @@ def main() -> None:
     plot_master_summary(results_dir, figures_dir)
 
     plot_exp1_extra_analysis(results_dir, figures_dir)
+    plot_exp2_extra_analysis(results_dir, figures_dir)
     plot_exp3_extra_analysis(results_dir, figures_dir)
     plot_exp5_extra_analysis(results_dir, figures_dir)
     plot_exp6_extra_analysis(results_dir, figures_dir)

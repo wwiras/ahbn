@@ -42,6 +42,23 @@ class SimulationResult:
 
 
 # -----------------------------------------------------------------------------
+# Logging helpers
+# -----------------------------------------------------------------------------
+
+def log(msg: str) -> None:
+    print(f"[INFO] {msg}", flush=True)
+
+
+def log_exp_start(exp_id: int, title: str) -> None:
+    print(f"\n[INFO] Experiment {exp_id} ongoing: {title}", flush=True)
+
+
+def log_exp_done(exp_id: int, title: str, out_file: str) -> None:
+    print(f"[INFO] Experiment {exp_id} done: {title}", flush=True)
+    print(f"[INFO] Output written: {out_file}", flush=True)
+
+
+# -----------------------------------------------------------------------------
 # Core simulator
 # -----------------------------------------------------------------------------
 
@@ -333,10 +350,11 @@ def build_results_dirname() -> str:
 
 def ensure_new_dir(path: str) -> None:
     if os.path.exists(path):
-        print(f"ERROR: results folder already exists: {os.path.abspath(path)}")
-        print("Stopping experiment to avoid overwriting existing analysis.")
+        print(f"[ERROR] Results folder already exists: {os.path.abspath(path)}", flush=True)
+        print("[ERROR] Stopping experiment to avoid overwriting existing analysis.", flush=True)
         sys.exit(1)
     os.makedirs(path, exist_ok=False)
+    log(f"Results folder created: {os.path.abspath(path)}")
 
 
 def write_csv(path: str, rows: List[dict]) -> None:
@@ -374,13 +392,16 @@ def summarize_results(experiment_id: int, extra: Dict, results: List[SimulationR
 # -----------------------------------------------------------------------------
 
 def experiment_1_fanout_vs_duplication(out_dir: str, runs: int = RUNS) -> List[dict]:
+    title = "Fanout vs Duplication"
+    out_file = os.path.join(out_dir, "exp1_fanout_vs_duplication.csv")
+    log_exp_start(1, title)
+
     rows: List[dict] = []
     node_count = 100
     ba_m = 3
 
     for fanout in [1, 2, 3, 4, 5, 6, 8]:
         run_results = []
-
         for i in range(runs):
             seed = BASE_SEED + i
             sim = BASimulator(seed)
@@ -392,11 +413,16 @@ def experiment_1_fanout_vs_duplication(out_dir: str, runs: int = RUNS) -> List[d
             summarize_results(1, {"fanout": fanout, "node_count": node_count, "ba_m": ba_m}, run_results)
         )
 
-    write_csv(os.path.join(out_dir, "exp1_fanout_vs_duplication.csv"), rows)
+    write_csv(out_file, rows)
+    log_exp_done(1, title, out_file)
     return rows
 
 
 def experiment_2_ch_count_vs_node_count(out_dir: str, runs: int = RUNS) -> List[dict]:
+    title = "CH Count vs Node Count"
+    out_file = os.path.join(out_dir, "exp2_ch_count_vs_node_count.csv")
+    log_exp_start(2, title)
+
     rows: List[dict] = []
 
     for node_count in [50, 100, 200, 300, 400]:
@@ -406,7 +432,6 @@ def experiment_2_ch_count_vs_node_count(out_dir: str, runs: int = RUNS) -> List[
 
         for ch_count in ch_options:
             run_results = []
-
             for i in range(runs):
                 seed = BASE_SEED + i
                 sim = BASimulator(seed)
@@ -419,18 +444,22 @@ def experiment_2_ch_count_vs_node_count(out_dir: str, runs: int = RUNS) -> List[
                 summarize_results(2, {"node_count": node_count, "ch_count": ch_count, "ba_m": ba_m}, run_results)
             )
 
-    write_csv(os.path.join(out_dir, "exp2_ch_count_vs_node_count.csv"), rows)
+    write_csv(out_file, rows)
+    log_exp_done(2, title, out_file)
     return rows
 
 
 def experiment_3_topology_density_vs_performance(out_dir: str, runs: int = RUNS) -> List[dict]:
+    title = "Topology Density vs Performance"
+    out_file = os.path.join(out_dir, "exp3_topology_density_vs_performance.csv")
+    log_exp_start(3, title)
+
     rows: List[dict] = []
     node_count = 100
     fanout = 3
 
     for ba_m in [1, 2, 3, 4, 6, 8]:
         run_results = []
-
         for i in range(runs):
             seed = BASE_SEED + i
             sim = BASimulator(seed)
@@ -442,11 +471,16 @@ def experiment_3_topology_density_vs_performance(out_dir: str, runs: int = RUNS)
             summarize_results(3, {"node_count": node_count, "ba_m": ba_m, "fanout": fanout}, run_results)
         )
 
-    write_csv(os.path.join(out_dir, "exp3_topology_density_vs_performance.csv"), rows)
+    write_csv(out_file, rows)
+    log_exp_done(3, title, out_file)
     return rows
 
 
 def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS) -> List[dict]:
+    title = "CH Overload / Failure"
+    out_file = os.path.join(out_dir, "exp4_ch_overload_failure.csv")
+    log_exp_start(4, title)
+
     rows: List[dict] = []
     node_count = 120
     ch_count = 6
@@ -454,7 +488,6 @@ def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS) -> List[dic
 
     for overload_limit in [None, 20, 10, 5, 2]:
         run_results = []
-
         for i in range(runs):
             seed = BASE_SEED + i
             sim = BASimulator(seed)
@@ -486,7 +519,6 @@ def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS) -> List[dic
 
     for failed_ch_count in [0, 1, 2, 3]:
         run_results = []
-
         for i in range(runs):
             seed = BASE_SEED + i
             sim = BASimulator(seed)
@@ -521,11 +553,16 @@ def experiment_4_ch_overload_failure(out_dir: str, runs: int = RUNS) -> List[dic
             )
         )
 
-    write_csv(os.path.join(out_dir, "exp4_ch_overload_failure.csv"), rows)
+    write_csv(out_file, rows)
+    log_exp_done(4, title, out_file)
     return rows
 
 
 def experiment_5_churn_sensitivity(out_dir: str, runs: int = RUNS) -> List[dict]:
+    title = "Churn Sensitivity"
+    out_file = os.path.join(out_dir, "exp5_churn_sensitivity.csv")
+    log_exp_start(5, title)
+
     rows: List[dict] = []
     node_count = 100
     ba_m = 3
@@ -548,9 +585,7 @@ def experiment_5_churn_sensitivity(out_dir: str, runs: int = RUNS) -> List[dict]
             removed = set(sim.rng.sample(all_nodes[1:], min(remove_count, node_count - 1)))
             active = set(all_nodes) - removed
 
-            gossip_runs.append(
-                sim.run_gossip(g=g, source=0, fanout=fanout, active_nodes=active)
-            )
+            gossip_runs.append(sim.run_gossip(g=g, source=0, fanout=fanout, active_nodes=active))
 
             sim_cluster = BASimulator(seed)
             cluster_runs.append(
@@ -579,11 +614,16 @@ def experiment_5_churn_sensitivity(out_dir: str, runs: int = RUNS) -> List[dict]
             )
         )
 
-    write_csv(os.path.join(out_dir, "exp5_churn_sensitivity.csv"), rows)
+    write_csv(out_file, rows)
+    log_exp_done(5, title, out_file)
     return rows
 
 
 def experiment_6_heterogeneous_resources(out_dir: str, runs: int = RUNS) -> List[dict]:
+    title = "Heterogeneous Resources"
+    out_file = os.path.join(out_dir, "exp6_heterogeneous_resources.csv")
+    log_exp_start(6, title)
+
     rows: List[dict] = []
     node_count = 100
     ba_m = 3
@@ -621,7 +661,8 @@ def experiment_6_heterogeneous_resources(out_dir: str, runs: int = RUNS) -> List
             )
         )
 
-    write_csv(os.path.join(out_dir, "exp6_heterogeneous_resources.csv"), rows)
+    write_csv(out_file, rows)
+    log_exp_done(6, title, out_file)
     return rows
 
 
@@ -644,6 +685,7 @@ def print_summary(title: str, rows: List[dict], limit: int = 8) -> None:
 # -----------------------------------------------------------------------------
 
 def main() -> None:
+    log("Starting experiment pipeline")
     out_dir = build_results_dirname()
     ensure_new_dir(out_dir)
 
@@ -661,8 +703,9 @@ def main() -> None:
     print_summary("Exp 5 - Churn Sensitivity", exp5)
     print_summary("Exp 6 - Heterogeneous Resources", exp6)
 
-    print("\nCSV files written to:", os.path.abspath(out_dir))
-    print(f"RUNS = {RUNS}, BASE_SEED = {BASE_SEED}")
+    log(f"CSV files written to: {os.path.abspath(out_dir)}")
+    log(f"RUNS = {RUNS}, BASE_SEED = {BASE_SEED}")
+    log("Experiment pipeline completed successfully")
 
 
 if __name__ == "__main__":

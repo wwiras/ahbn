@@ -7,6 +7,26 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
+# -----------------------------------------------------------------------------
+# Logging helpers
+# -----------------------------------------------------------------------------
+
+def log(msg: str) -> None:
+    print(f"[INFO] {msg}", flush=True)
+
+
+def log_plot_start(name: str) -> None:
+    print(f"\n[INFO] Plot ongoing: {name}", flush=True)
+
+
+def log_plot_done(name: str) -> None:
+    print(f"[INFO] Plot done: {name}", flush=True)
+
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+
 def parse_result_dirname(results_dirname: str) -> str:
     if not results_dirname.startswith("results_"):
         raise ValueError("Result folder argument must start with 'results_'")
@@ -36,6 +56,9 @@ def save_plot(figures_dir: Path, filename: str) -> None:
 # -----------------------------------------------------------------------------
 
 def plot_exp1_fanout_vs_duplication(results_dir: Path, figures_dir: Path) -> None:
+    name = "Exp 1 - Fanout vs Duplication"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp1_fanout_vs_duplication.csv").sort_values("fanout")
 
     plt.figure(figsize=(8, 5))
@@ -80,8 +103,13 @@ def plot_exp1_fanout_vs_duplication(results_dir: Path, figures_dir: Path) -> Non
     plt.grid(True, alpha=0.3)
     save_plot(figures_dir, "exp1_delay_duplicate_tradeoff.png")
 
+    log_plot_done(name)
+
 
 def plot_exp2_ch_count_vs_node_count(results_dir: Path, figures_dir: Path) -> None:
+    name = "Exp 2 - CH Count vs Node Count"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp2_ch_count_vs_node_count.csv").sort_values(["node_count", "ch_count"])
 
     for node_count in sorted(df["node_count"].unique()):
@@ -111,8 +139,13 @@ def plot_exp2_ch_count_vs_node_count(results_dir: Path, figures_dir: Path) -> No
         plt.grid(True, alpha=0.3)
         save_plot(figures_dir, f"exp2_delivery_nodes_{node_count}.png")
 
+    log_plot_done(name)
+
 
 def plot_exp3_topology_density_vs_performance(results_dir: Path, figures_dir: Path) -> None:
+    name = "Exp 3 - Topology Density vs Performance"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp3_topology_density_vs_performance.csv").sort_values("ba_m")
 
     plt.figure(figsize=(8, 5))
@@ -149,8 +182,13 @@ def plot_exp3_topology_density_vs_performance(results_dir: Path, figures_dir: Pa
     plt.grid(True, alpha=0.3)
     save_plot(figures_dir, "exp3_density_tradeoff.png")
 
+    log_plot_done(name)
+
 
 def plot_exp4_ch_overload_failure(results_dir: Path, figures_dir: Path) -> None:
+    name = "Exp 4 - CH Overload / Failure"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp4_ch_overload_failure.csv")
 
     overload = df[df["scenario"] == "overload"].copy()
@@ -196,8 +234,13 @@ def plot_exp4_ch_overload_failure(results_dir: Path, figures_dir: Path) -> None:
     plt.grid(True, alpha=0.3)
     save_plot(figures_dir, "exp4_failure_vs_rounds.png")
 
+    log_plot_done(name)
+
 
 def plot_exp5_churn_sensitivity(results_dir: Path, figures_dir: Path) -> None:
+    name = "Exp 5 - Churn Sensitivity"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp5_churn_sensitivity.csv").sort_values(["protocol", "churn_rate"])
 
     plt.figure(figsize=(8, 5))
@@ -233,8 +276,13 @@ def plot_exp5_churn_sensitivity(results_dir: Path, figures_dir: Path) -> None:
     plt.grid(True, alpha=0.3)
     save_plot(figures_dir, "exp5_churn_vs_duplicates.png")
 
+    log_plot_done(name)
+
 
 def plot_exp6_heterogeneous_resources(results_dir: Path, figures_dir: Path) -> None:
+    name = "Exp 6 - Heterogeneous Resources"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp6_heterogeneous_resources.csv").sort_values("scenario")
 
     plt.figure(figsize=(8, 5))
@@ -261,8 +309,13 @@ def plot_exp6_heterogeneous_resources(results_dir: Path, figures_dir: Path) -> N
     plt.grid(True, alpha=0.3, axis="y")
     save_plot(figures_dir, "exp6_heterogeneity_vs_duplicates.png")
 
+    log_plot_done(name)
+
 
 def plot_master_summary(results_dir: Path, figures_dir: Path) -> None:
+    name = "Master Summary"
+    log_plot_start(name)
+
     exp1 = read_csv(results_dir, "exp1_fanout_vs_duplication.csv")
     exp3 = read_csv(results_dir, "exp3_topology_density_vs_performance.csv")
     exp5 = read_csv(results_dir, "exp5_churn_sensitivity.csv")
@@ -285,12 +338,17 @@ def plot_master_summary(results_dir: Path, figures_dir: Path) -> None:
     plt.grid(True, alpha=0.3)
     save_plot(figures_dir, "master_tradeoff_landscape.png")
 
+    log_plot_done(name)
+
 
 # -----------------------------------------------------------------------------
 # Extra analysis plots
 # -----------------------------------------------------------------------------
 
 def plot_exp1_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
+    name = "Extra Analysis - Exp 1"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp1_fanout_vs_duplication.csv").sort_values("fanout")
 
     plt.figure(figsize=(8, 5))
@@ -301,8 +359,13 @@ def plot_exp1_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
     plt.grid(True, alpha=0.3)
     save_plot(figures_dir, "extra_exp1_fanout_vs_efficiency.png")
 
+    log_plot_done(name)
+
 
 def plot_exp3_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
+    name = "Extra Analysis - Exp 3"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp3_topology_density_vs_performance.csv").sort_values("ba_m")
 
     plt.figure(figsize=(8, 5))
@@ -339,8 +402,13 @@ def plot_exp3_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
     plt.grid(True, alpha=0.3)
     save_plot(figures_dir, "extra_exp3_clustering_vs_duplicates.png")
 
+    log_plot_done(name)
+
 
 def plot_exp5_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
+    name = "Extra Analysis - Exp 5"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp5_churn_sensitivity.csv").sort_values(["protocol", "churn_rate"])
 
     plt.figure(figsize=(8, 5))
@@ -354,8 +422,13 @@ def plot_exp5_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
     plt.grid(True, alpha=0.3)
     save_plot(figures_dir, "extra_exp5_churn_vs_efficiency.png")
 
+    log_plot_done(name)
+
 
 def plot_exp6_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
+    name = "Extra Analysis - Exp 6"
+    log_plot_start(name)
+
     df = read_csv(results_dir, "exp6_heterogeneous_resources.csv").sort_values("scenario")
 
     plt.figure(figsize=(8, 5))
@@ -365,6 +438,8 @@ def plot_exp6_extra_analysis(results_dir: Path, figures_dir: Path) -> None:
     plt.title("Extra Analysis: Resource Heterogeneity vs Propagation Efficiency")
     plt.grid(True, alpha=0.3, axis="y")
     save_plot(figures_dir, "extra_exp6_heterogeneity_vs_efficiency.png")
+
+    log_plot_done(name)
 
 
 # -----------------------------------------------------------------------------
@@ -381,12 +456,15 @@ def main() -> None:
     results_dir = Path(results_dirname)
 
     if not results_dir.exists() or not results_dir.is_dir():
-        print(f"ERROR: results folder does not exist: {results_dir.resolve()}")
+        print(f"[ERROR] Results folder does not exist: {results_dir.resolve()}", flush=True)
         sys.exit(1)
 
     suffix = parse_result_dirname(results_dirname)
     figures_dir = Path(f"figures_{suffix}")
     ensure_dir(figures_dir)
+
+    log(f"Reading results from: {results_dir.resolve()}")
+    log(f"Figures folder ready: {figures_dir.resolve()}")
 
     plot_exp1_fanout_vs_duplication(results_dir, figures_dir)
     plot_exp2_ch_count_vs_node_count(results_dir, figures_dir)
@@ -396,14 +474,12 @@ def main() -> None:
     plot_exp6_heterogeneous_resources(results_dir, figures_dir)
     plot_master_summary(results_dir, figures_dir)
 
-    # extra analysis
     plot_exp1_extra_analysis(results_dir, figures_dir)
     plot_exp3_extra_analysis(results_dir, figures_dir)
     plot_exp5_extra_analysis(results_dir, figures_dir)
     plot_exp6_extra_analysis(results_dir, figures_dir)
 
-    print(f"Results read from: {results_dir.resolve()}")
-    print(f"Figures written to: {figures_dir.resolve()}")
+    log("Plotting pipeline completed successfully")
 
 
 if __name__ == "__main__":

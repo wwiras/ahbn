@@ -63,6 +63,8 @@ v0.2/.DS_Store
 
 # results
 results
+results_*/
 
 # figures
 figures
+figures_*/

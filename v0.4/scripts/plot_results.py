@@ -63,7 +63,7 @@ def plot_exp07(df: pd.DataFrame, timestamp: str) -> None:
         plt.close()
 
 
-def plot_exp08(df: pd.DataFrame, timestamp: str) -> None:
+# def plot_exp08(df: pd.DataFrame, timestamp: str) -> None:
     ensure_dir("outputs/plots")
 
     grouped = (
@@ -112,8 +112,48 @@ def plot_exp08(df: pd.DataFrame, timestamp: str) -> None:
         )
         plt.close()
 
+def plot_exp08(df, timestamp):
+    ensure_dir("outputs/plots")
 
-def plot_exp09(df: pd.DataFrame, timestamp: str) -> None:
+    grouped = (
+        df.groupby(["strategy", "ch_overload_factor"])
+        .agg(
+            delay_mean=("propagation_delay", "mean"),
+            delivery_mean=("delivery_ratio", "mean"),
+        )
+        .reset_index()
+    )
+
+    strategies = grouped["strategy"].unique()
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+
+    # Delay subplot
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].sort_values("ch_overload_factor")
+        axes[0].plot(part["ch_overload_factor"], part["delay_mean"], marker="o", label=s)
+
+    axes[0].set_xlabel("CH Overload Factor")
+    axes[0].set_ylabel("Propagation Delay")
+    axes[0].set_title("Delay vs CH Overload")
+    axes[0].legend()
+
+    # Delivery subplot
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].sort_values("ch_overload_factor")
+        axes[1].plot(part["ch_overload_factor"], part["delivery_mean"], marker="o", label=s)
+
+    axes[1].set_xlabel("CH Overload Factor")
+    axes[1].set_ylabel("Delivery Ratio")
+    axes[1].set_title("Delivery vs CH Overload")
+    axes[1].legend()
+
+    plt.tight_layout()
+    plt.savefig(f"outputs/plots/exp08_combined_{timestamp}.png")
+    plt.close()
+
+
+# def plot_exp09(df: pd.DataFrame, timestamp: str) -> None:
     ensure_dir("outputs/plots")
 
     grouped = (
@@ -162,6 +202,45 @@ def plot_exp09(df: pd.DataFrame, timestamp: str) -> None:
         )
         plt.close()
 
+def plot_exp09(df, timestamp):
+    ensure_dir("outputs/plots")
+
+    grouped = (
+        df.groupby(["strategy", "topology_param"])
+        .agg(
+            duplicates_mean=("duplicates", "mean"),
+            delay_mean=("propagation_delay", "mean"),
+        )
+        .reset_index()
+    )
+
+    strategies = grouped["strategy"].unique()
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+
+    # Duplicates subplot
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].sort_values("topology_param")
+        axes[0].plot(part["topology_param"], part["duplicates_mean"], marker="o", label=s)
+
+    axes[0].set_xlabel("Edge Probability")
+    axes[0].set_ylabel("Duplicates")
+    axes[0].set_title("Duplicates vs Density")
+    axes[0].legend()
+
+    # Delay subplot
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].sort_values("topology_param")
+        axes[1].plot(part["topology_param"], part["delay_mean"], marker="o", label=s)
+
+    axes[1].set_xlabel("Edge Probability")
+    axes[1].set_ylabel("Propagation Delay")
+    axes[1].set_title("Delay vs Density")
+    axes[1].legend()
+
+    plt.tight_layout()
+    plt.savefig(f"outputs/plots/exp09_combined_{timestamp}.png")
+    plt.close()
 
 def main(path: str) -> None:
     df = pd.read_csv(path)

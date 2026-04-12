@@ -26,6 +26,7 @@ def run_single(
     ch_overload_factor: float | None = None,
     edge_prob: float | None = None,
     ba_m: int | None = None,
+    adaptive_fanout: bool = False,
 ) -> dict:
     graph = get_or_build_topology(
         topology_type=topology_type,
@@ -50,7 +51,10 @@ def run_single(
     elif strategy_name == "ahbn":
         cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters or 4)
         controller = AHBNController(AHBNParams())
-        strategy = AHBNStrategy(default_fanout=fanout if fanout is not None else 3)
+        strategy = AHBNStrategy(
+            default_fanout=fanout if fanout is not None else 3,
+            adaptive_fanout=adaptive_fanout,
+        )
 
     else:
         raise ValueError(f"Unknown strategy: {strategy_name}")
@@ -89,6 +93,10 @@ def exp07(cfg: dict) -> list[ResultRow]:
     edge_prob = cfg.get("edge_prob")
     ba_m = cfg.get("ba_m")
 
+    # Exp07 is a fanout sensitivity experiment.
+    # Therefore AHBN should respect the configured fanout directly.
+    adaptive_fanout = cfg.get("adaptive_fanout", False)
+
     for fanout in fanouts:
         for run_idx in range(runs_per_setting):
             seed = base_seed + run_idx
@@ -107,6 +115,7 @@ def exp07(cfg: dict) -> list[ResultRow]:
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
                     ba_m=ba_m,
+                    adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
                 )
                 rows.append(
                     ResultRow(
@@ -146,6 +155,9 @@ def exp08(cfg: dict) -> list[ResultRow]:
     edge_prob = cfg.get("edge_prob")
     ba_m = cfg.get("ba_m")
 
+    # For Exp08, adaptive fanout may be useful later if you want AHBN to behave adaptively.
+    adaptive_fanout = cfg.get("adaptive_fanout", True)
+
     for overload in overload_values:
         for run_idx in range(runs_per_setting):
             seed = base_seed + run_idx
@@ -164,6 +176,7 @@ def exp08(cfg: dict) -> list[ResultRow]:
                     ch_overload_factor=overload,
                     edge_prob=edge_prob,
                     ba_m=ba_m,
+                    adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
                 )
                 rows.append(
                     ResultRow(
@@ -205,6 +218,9 @@ def exp09(cfg: dict) -> list[ResultRow]:
 
     edge_probs = cfg["edge_probs"]
 
+    # For Exp09, you can choose whether AHBN should remain fixed-fanout or adaptive.
+    adaptive_fanout = cfg.get("adaptive_fanout", False)
+
     for edge_prob in edge_probs:
         for run_idx in range(runs_per_setting):
             seed = base_seed + run_idx
@@ -222,6 +238,7 @@ def exp09(cfg: dict) -> list[ResultRow]:
                     fanout=fanout,
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
+                    adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
                 )
                 rows.append(
                     ResultRow(
@@ -268,6 +285,7 @@ def main() -> None:
 
     else:
         raise ValueError(f"Unknown experiment: {experiment}")
+
 
 if __name__ == "__main__":
     main()

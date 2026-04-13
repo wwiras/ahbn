@@ -12,6 +12,48 @@ from ahbn.topology import assign_static_clusters, build_nodes_from_graph, get_or
 from ahbn.utils import ResultRow, save_results_csv
 
 
+def build_ahbn_params(cfg: dict) -> AHBNParams:
+    p = cfg.get("ahbn_params", {})
+
+    return AHBNParams(
+        ewma_alpha=p.get("ewma_alpha", 0.3),
+        d0=p.get("d0", 0.2),
+        u0=p.get("u0", 5.0),
+        l0=p.get("l0", 2.0),
+        rho0=p.get("rho0", 0.1),
+        a_dup=p.get("a_dup", -2.0),
+        a_load=p.get("a_load", -1.5),
+        a_lat=p.get("a_lat", 1.5),
+        a_churn=p.get("a_churn", 1.0),
+        min_fanout=p.get("min_fanout", 1),
+        max_fanout=p.get("max_fanout", 6),
+        mode_threshold=p.get("mode_threshold", 0.5),
+    )
+
+
+def get_result_tag(cfg: dict) -> str:
+    """
+    Returns the logical result tag used for output naming.
+    Examples:
+      exp07
+      exp07a
+      exp07b
+      exp08
+      exp09
+    """
+    experiment = cfg["experiment"]
+    return cfg.get("result_tag", experiment)
+
+
+def get_experiment_label(cfg: dict) -> str:
+    """
+    Logical experiment label stored inside each CSV row.
+    Usually keep exp07a/exp07b as exp07 variants while preserving
+    their file separation via result_tag.
+    """
+    return cfg.get("experiment_label", cfg["experiment"])
+
+
 def run_single(
     strategy_name: str,
     seed: int,
@@ -27,6 +69,7 @@ def run_single(
     edge_prob: float | None = None,
     ba_m: int | None = None,
     adaptive_fanout: bool = False,
+    ahbn_params: AHBNParams | None = None,
 ) -> dict:
     graph = get_or_build_topology(
         topology_type=topology_type,
@@ -50,7 +93,7 @@ def run_single(
 
     elif strategy_name == "ahbn":
         cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters or 4)
-        controller = AHBNController(AHBNParams())
+        controller = AHBNController(ahbn_params if ahbn_params is not None else AHBNParams())
         strategy = AHBNStrategy(
             default_fanout=fanout if fanout is not None else 3,
             adaptive_fanout=adaptive_fanout,
@@ -78,6 +121,8 @@ def run_single(
 def exp07(cfg: dict) -> list[ResultRow]:
     rows: list[ResultRow] = []
 
+    experiment_label = get_experiment_label(cfg)
+
     base_seed = cfg["seed"]
     runs_per_setting = cfg["runs_per_setting"]
     fanouts = cfg["fanouts"]
@@ -93,9 +138,8 @@ def exp07(cfg: dict) -> list[ResultRow]:
     edge_prob = cfg.get("edge_prob")
     ba_m = cfg.get("ba_m")
 
-    # Exp07 is a fanout sensitivity experiment.
-    # Therefore AHBN should respect the configured fanout directly.
     adaptive_fanout = cfg.get("adaptive_fanout", False)
+    ahbn_params = build_ahbn_params(cfg)
 
     for fanout in fanouts:
         for run_idx in range(runs_per_setting):
@@ -116,10 +160,11 @@ def exp07(cfg: dict) -> list[ResultRow]:
                     edge_prob=edge_prob,
                     ba_m=ba_m,
                     adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
+                    ahbn_params=ahbn_params,
                 )
                 rows.append(
                     ResultRow(
-                        experiment="exp07",
+                        experiment=experiment_label,
                         strategy=strategy_name,
                         seed=seed,
                         num_nodes=num_nodes,
@@ -140,6 +185,8 @@ def exp07(cfg: dict) -> list[ResultRow]:
 def exp08(cfg: dict) -> list[ResultRow]:
     rows: list[ResultRow] = []
 
+    experiment_label = get_experiment_label(cfg)
+
     base_seed = cfg["seed"]
     runs_per_setting = cfg["runs_per_setting"]
     overload_values = cfg["ch_overload_factor"]
@@ -155,8 +202,8 @@ def exp08(cfg: dict) -> list[ResultRow]:
     edge_prob = cfg.get("edge_prob")
     ba_m = cfg.get("ba_m")
 
-    # For Exp08, adaptive fanout may be useful later if you want AHBN to behave adaptively.
     adaptive_fanout = cfg.get("adaptive_fanout", True)
+    ahbn_params = build_ahbn_params(cfg)
 
     for overload in overload_values:
         for run_idx in range(runs_per_setting):
@@ -177,10 +224,11 @@ def exp08(cfg: dict) -> list[ResultRow]:
                     edge_prob=edge_prob,
                     ba_m=ba_m,
                     adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
+                    ahbn_params=ahbn_params,
                 )
                 rows.append(
                     ResultRow(
-                        experiment="exp08",
+                        experiment=experiment_label,
                         strategy=strategy_name,
                         seed=seed,
                         num_nodes=num_nodes,
@@ -201,6 +249,8 @@ def exp08(cfg: dict) -> list[ResultRow]:
 def exp09(cfg: dict) -> list[ResultRow]:
     rows: list[ResultRow] = []
 
+    experiment_label = get_experiment_label(cfg)
+
     base_seed = cfg["seed"]
     runs_per_setting = cfg["runs_per_setting"]
     num_nodes = cfg["num_nodes"]
@@ -218,8 +268,8 @@ def exp09(cfg: dict) -> list[ResultRow]:
 
     edge_probs = cfg["edge_probs"]
 
-    # For Exp09, you can choose whether AHBN should remain fixed-fanout or adaptive.
     adaptive_fanout = cfg.get("adaptive_fanout", False)
+    ahbn_params = build_ahbn_params(cfg)
 
     for edge_prob in edge_probs:
         for run_idx in range(runs_per_setting):
@@ -239,10 +289,11 @@ def exp09(cfg: dict) -> list[ResultRow]:
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
                     adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
+                    ahbn_params=ahbn_params,
                 )
                 rows.append(
                     ResultRow(
-                        experiment="exp09",
+                        experiment=experiment_label,
                         strategy=strategy_name,
                         seed=seed,
                         num_nodes=num_nodes,
@@ -267,20 +318,21 @@ def main() -> None:
 
     cfg = load_yaml_config(args.config)
     experiment = cfg["experiment"]
+    result_tag = get_result_tag(cfg)
 
     if experiment == "exp07":
         rows = exp07(cfg)
-        path = save_results_csv(rows, "outputs/csv/exp07_results.csv")
+        path = save_results_csv(rows, f"outputs/csv/{result_tag}_results.csv")
         print(f"Saved {path}")
 
     elif experiment == "exp08":
         rows = exp08(cfg)
-        path = save_results_csv(rows, "outputs/csv/exp08_results.csv")
+        path = save_results_csv(rows, f"outputs/csv/{result_tag}_results.csv")
         print(f"Saved {path}")
 
     elif experiment == "exp09":
         rows = exp09(cfg)
-        path = save_results_csv(rows, "outputs/csv/exp09_results.csv")
+        path = save_results_csv(rows, f"outputs/csv/{result_tag}_results.csv")
         print(f"Saved {path}")
 
     else:

@@ -1,0 +1,18 @@
+experiment: exp09
+experiment_label: exp09
+result_tag: exp09
+
+topology_type: er
+num_nodes: 100
+seed: 42
+message_source: 0
+fanout: 3
+num_clusters: 4
+runs_per_setting: 20
+base_delay: 1.0
+jitter: 0.2
+use_topology_cache: true
+
+edge_probs: [0.03, 0.05, 0.08, 0.10, 0.15]
+
+adaptive_fanout: false

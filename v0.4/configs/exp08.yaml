@@ -1,0 +1,18 @@
+experiment: exp08
+experiment_label: exp08
+result_tag: exp08
+
+topology_type: ba
+num_nodes: 100
+ba_m: 3
+seed: 42
+message_source: 0
+num_clusters: 4
+runs_per_setting: 20
+base_delay: 1.0
+jitter: 0.2
+use_topology_cache: true
+
+ch_overload_factor: [1.0, 1.5, 2.0, 2.5, 3.0]
+
+adaptive_fanout: true

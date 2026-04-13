@@ -66,53 +66,6 @@ class Simulator:
             payload={"dst_id": source_id, "src_id": source_id, "message": msg},
         )
 
-    # ------------------------------------------------------------------
-    # Exp09 helpers: local topology signals
-    # ------------------------------------------------------------------
-    def get_node_degree(self, node: Node) -> int:
-        return len(node.neighbors)
-
-    def get_neighbor_overlap(self, node: Node) -> float:
-        """
-        Average Jaccard overlap between the node's neighbor set and each neighbor's set.
-        This is a local redundancy signal for Exp09 dense-topology control.
-        """
-        nbrs = set(node.neighbors)
-        if not nbrs:
-            return 0.0
-
-        vals: list[float] = []
-        for nbr_id in nbrs:
-            nbr_node = self.nodes.get(nbr_id)
-            if nbr_node is None:
-                continue
-            nbr_set = set(nbr_node.neighbors)
-            inter = len(nbrs & nbr_set)
-            union = len(nbrs | nbr_set)
-            vals.append(inter / union if union > 0 else 0.0)
-
-        if not vals:
-            return 0.0
-        return sum(vals) / len(vals)
-
-    def get_redundancy_proxy(self, node: Node) -> float:
-        """
-        Combined local redundancy pressure.
-        You can tune the weights later from config/controller defaults.
-        """
-        if self.controller is None:
-            return 0.0
-
-        degree = self.get_node_degree(node)
-        overlap = self.get_neighbor_overlap(node)
-
-        degree_ref = getattr(self.controller, "degree_ref", 10.0)
-        b_degree = getattr(self.controller, "b_degree", 0.25)
-        b_overlap = getattr(self.controller, "b_overlap", 0.75)
-
-        norm_degree = min(2.0, degree / max(1.0, degree_ref))
-        return b_overlap * overlap + b_degree * norm_degree
-
     def update_ahbn_state(self, node: Node, now: float, receive_lag: float) -> None:
         if self.controller is None:
             return
@@ -121,15 +74,8 @@ class Simulator:
         duplicate_ratio = (
             node.stats.received_duplicate / total_recv if total_recv > 0 else 0.0
         )
-
-        # Existing proxies
         load_proxy = float(node.stats.forwarded)
         latency_proxy = receive_lag
-
-        # New Exp09 topology-aware proxies
-        degree_proxy = float(self.get_node_degree(node))
-        overlap_proxy = self.get_neighbor_overlap(node)
-        redundancy_proxy = self.get_redundancy_proxy(node)
 
         self.controller.update_metrics(
             node.control,
@@ -137,9 +83,6 @@ class Simulator:
             load_proxy=load_proxy,
             latency_proxy=latency_proxy,
             churn_proxy=0.0,
-            degree_proxy=degree_proxy,
-            overlap_proxy=overlap_proxy,
-            redundancy_proxy=redundancy_proxy,
         )
         self.controller.decide_mode_and_fanout(node.control)
 

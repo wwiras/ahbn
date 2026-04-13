@@ -1,23 +1,58 @@
-# experiment: exp09
-# num_nodes: 100
-# edge_probs: [0.04, 0.06, 0.08, 0.10, 0.15]
-# seed: 42
-# message_source: 0
-# runs_per_setting: 20
-# base_delay: 1.0
-# jitter: 0.2
-# fanout: 3
-# num_clusters: 4
-
 experiment: exp09
-topology_type: er
-num_nodes: 100
-edge_probs: [0.04, 0.06, 0.08, 0.10, 0.15]
 seed: 42
-message_source: 0
-runs_per_setting: 20
+runs_per_setting: 30
+num_nodes: 100
+topology_type: er
+edge_probs: [0.04, 0.06, 0.08, 0.10, 0.12]
+fanout: 4
+num_clusters: 4
 base_delay: 1.0
 jitter: 0.2
-fanout: 3
-num_clusters: 4
+message_source: 0
 use_topology_cache: true
+
+strategies: ["gossip", "cluster", "ahbn"]
+
+ahbn:
+  adaptive_fanout: true
+  hybrid_mode: true
+  use_tau_gate: true
+  min_cluster_targets: 1
+
+  ewma_alpha: 0.3
+
+  d0: 0.2
+  u0: 5.0
+  l0: 2.0
+  rho0: 0.1
+  deg0: 8.0
+  ov0: 0.25
+  r0: 0.35
+
+  a_dup: -2.0
+  a_load: -1.5
+  a_lat: 1.5
+  a_churn: 1.0
+  a_deg: -0.4
+  a_ov: -1.2
+  a_red: -1.8
+
+  b_degree: 0.25
+  b_overlap: 0.75
+
+  min_fanout: 1
+  max_fanout: 6
+  mode_threshold: 0.5
+
+  fanout_dup_penalty: 2.0
+  fanout_load_penalty: 0.5
+  fanout_lat_reward: 0.8
+  fanout_red_penalty: 1.5
+
+  tau_max: 0.82
+  tau_min: 0.26
+  tau_dup_penalty: 1.2
+  tau_red_penalty: 1.8
+
+  min_weight: 0.25
+  max_weight: 0.70

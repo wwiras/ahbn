@@ -24,6 +24,15 @@ def get_timestamp(csv_path: str) -> str:
     return ts
 
 
+def detect_xlabel(df: pd.DataFrame) -> str:
+    topo = df["topology_type"].iloc[0]
+    if topo == "er":
+        return "ER Edge Probability"
+    elif topo == "ba":
+        return "BA Attachment Parameter (m)"
+    return "Topology Parameter"
+
+
 def apply_offset(series: pd.Series, offset: float) -> pd.Series:
     return series.astype(float) + offset
 
@@ -32,40 +41,16 @@ def get_plot_output_path(experiment: str, timestamp: str) -> str:
     return f"outputs/plots/{experiment}_combined_{timestamp}.png"
 
 
-def get_exp07_3panel_output_path(timestamp: str) -> str:
-    return f"outputs/plots/exp07_3panel_{timestamp}.png"
-
-
 # -----------------------------
 # Exp07
 # -----------------------------
 def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     ensure_dir("outputs/plots")
 
-    required_cols = {
-        "experiment",
-        "strategy",
-        "fanout",
-        "delivery_ratio",
-        "propagation_delay",
-        "duplicates",
-    }
-    missing = required_cols - set(df.columns)
-    if missing:
-        raise ValueError(f"CSV is missing required columns: {sorted(missing)}")
+    df = df[df["strategy"].isin(["gossip", "ahbn"])].copy()
 
-    exp_values = set(df["experiment"].dropna().unique())
-    if exp_values != {"exp07"} and "exp07" not in exp_values:
-        print(
-            f"Warning: CSV contains experiment values {sorted(exp_values)}. "
-            f"This plotting script is intended for exp07."
-        )
-
-    # Keep only AHBN vs Gossip to match the exp08/exp09 comparison style
-    df_compare = df[df["strategy"].isin(["gossip", "ahbn"])].copy()
-
-    grouped_compare = (
-        df_compare.groupby(["strategy", "fanout"])
+    grouped = (
+        df.groupby(["strategy", "fanout"])
         .agg(
             delay_mean=("propagation_delay", "mean"),
             dup_mean=("duplicates", "mean"),
@@ -73,25 +58,16 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
         .reset_index()
     )
 
-    strategies = ["gossip", "ahbn"]
-    strategies = [s for s in strategies if s in grouped_compare["strategy"].unique()]
+    strategies = grouped["strategy"].unique()
+    offsets = {"gossip": -0.05, "ahbn": 0.05} if use_offset else {s: 0.0 for s in strategies}
 
-    offsets = (
-        {"gossip": -0.05, "ahbn": 0.05}
-        if use_offset
-        else {s: 0.0 for s in strategies}
-    )
+    x_ticks = sorted(df["fanout"].dropna().unique())
 
-    x_ticks = sorted(df_compare["fanout"].dropna().unique())
-
-    # -----------------------------
-    # 2-panel combined figure
-    # -----------------------------
     fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
 
     # Delay subplot
     for s in strategies:
-        part = grouped_compare[grouped_compare["strategy"] == s].sort_values("fanout")
+        part = grouped[grouped["strategy"] == s].sort_values("fanout")
         x = apply_offset(part["fanout"], offsets[s])
         axes[0].plot(x, part["delay_mean"], marker="o", label=s)
 
@@ -104,7 +80,7 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     # Duplicates subplot
     for s in strategies:
-        part = grouped_compare[grouped_compare["strategy"] == s].sort_values("fanout")
+        part = grouped[grouped["strategy"] == s].sort_values("fanout")
         x = apply_offset(part["fanout"], offsets[s])
         axes[1].plot(x, part["dup_mean"], marker="o", label=s)
 
@@ -116,85 +92,11 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     axes[1].grid(True, linestyle=":")
 
     plt.tight_layout()
-    out_combined = get_plot_output_path("exp07", ts)
-    plt.savefig(out_combined, bbox_inches="tight")
+    out = get_plot_output_path("exp07", ts)
+    plt.savefig(out, bbox_inches="tight")
     plt.close()
 
-    print(f"Saved {out_combined}")
-
-    # -----------------------------
-    # Optional exp07 full 3-panel figure
-    # -----------------------------
-    grouped_full = (
-        df.groupby(["fanout", "strategy"], as_index=False)[
-            ["delivery_ratio", "propagation_delay", "duplicates"]
-        ]
-        .mean()
-        .sort_values(["fanout", "strategy"])
-    )
-
-    preferred_order = ["ahbn", "gossip", "hybrid_fixed", "cluster"]
-    full_strategies = [s for s in preferred_order if s in grouped_full["strategy"].unique()]
-    for s in grouped_full["strategy"].unique():
-        if s not in full_strategies:
-            full_strategies.append(s)
-
-    fig3, axes3 = plt.subplots(1, 3, figsize=(18, 5))
-
-    # Delivery Ratio
-    ax = axes3[0]
-    for strategy in full_strategies:
-        subset = grouped_full[grouped_full["strategy"] == strategy]
-        ax.plot(
-            subset["fanout"],
-            subset["delivery_ratio"],
-            marker="o",
-            label=strategy,
-        )
-    ax.set_title("Delivery Ratio vs Fanout")
-    ax.set_xlabel("Fanout")
-    ax.set_ylabel("Delivery Ratio")
-    ax.grid(True, linestyle=":")
-    ax.legend()
-
-    # Delay
-    ax = axes3[1]
-    for strategy in full_strategies:
-        subset = grouped_full[grouped_full["strategy"] == strategy]
-        ax.plot(
-            subset["fanout"],
-            subset["propagation_delay"],
-            marker="o",
-            label=strategy,
-        )
-    ax.set_title("Delay vs Fanout")
-    ax.set_xlabel("Fanout")
-    ax.set_ylabel("Propagation Delay")
-    ax.grid(True, linestyle=":")
-    ax.legend()
-
-    # Duplicates
-    ax = axes3[2]
-    for strategy in full_strategies:
-        subset = grouped_full[grouped_full["strategy"] == strategy]
-        ax.plot(
-            subset["fanout"],
-            subset["duplicates"],
-            marker="o",
-            label=strategy,
-        )
-    ax.set_title("Duplicates vs Fanout")
-    ax.set_xlabel("Fanout")
-    ax.set_ylabel("Duplicates")
-    ax.grid(True, linestyle=":")
-    ax.legend()
-
-    fig3.tight_layout()
-    out_3panel = get_exp07_3panel_output_path(ts)
-    fig3.savefig(out_3panel, dpi=150, bbox_inches="tight")
-    plt.close(fig3)
-
-    print(f"Saved {out_3panel}")
+    print(f"Saved {out}")
 
 
 # -----------------------------
@@ -258,15 +160,6 @@ def plot_exp08(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 # -----------------------------
 # Exp09
 # -----------------------------
-def detect_xlabel(df: pd.DataFrame) -> str:
-    topo = df["topology_type"].iloc[0]
-    if topo == "er":
-        return "ER Edge Probability"
-    elif topo == "ba":
-        return "BA Attachment Parameter (m)"
-    return "Topology Parameter"
-
-
 def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     ensure_dir("outputs/plots")
 
@@ -295,7 +188,7 @@ def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     # Duplicates subplot
     for s in strategies:
         part = grouped[grouped["strategy"] == s].sort_values("topology_param")
-        x = apply_offset(part["topology_param"], offsets.get(s, 0.0))
+        x = apply_offset(part["topology_param"], offsets[s])
         axes[0].plot(x, part["dup_mean"], marker="o", label=s)
 
     axes[0].set_xlabel(xlabel)
@@ -308,7 +201,7 @@ def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     # Delay subplot
     for s in strategies:
         part = grouped[grouped["strategy"] == s].sort_values("topology_param")
-        x = apply_offset(part["topology_param"], offsets.get(s, 0.0))
+        x = apply_offset(part["topology_param"], offsets[s])
         axes[1].plot(x, part["delay_mean"], marker="o", label=s)
 
     axes[1].set_xlabel(xlabel)
@@ -324,6 +217,9 @@ def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     plt.close()
 
     print(f"Saved {out}")
+    
+    
+    
 
 
 # -----------------------------
@@ -332,9 +228,6 @@ def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 def main(path: str, use_offset: bool) -> None:
     df = pd.read_csv(path)
     ts = get_timestamp(path)
-
-    if "experiment" not in df.columns:
-        raise ValueError("CSV must contain an 'experiment' column")
 
     experiment = df["experiment"].iloc[0]
     df = df[df["experiment"] == experiment].copy()
@@ -354,11 +247,7 @@ def main(path: str, use_offset: bool) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("csv_path")
-    parser.add_argument(
-        "--offset",
-        action="store_true",
-        help="Enable slight x-offset to separate overlapping curves",
-    )
+    parser.add_argument("--offset", action="store_true", help="Enable slight x-offset to separate overlapping curves")
     args = parser.parse_args()
 
     main(args.csv_path, args.offset)

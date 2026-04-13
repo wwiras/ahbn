@@ -9,74 +9,11 @@ from ahbn.strategies.ahbn import AHBNStrategy
 from ahbn.strategies.cluster import ClusterStrategy
 from ahbn.strategies.gossip import GossipStrategy
 from ahbn.strategies.hybrid_fixed import HybridFixedStrategy
-from ahbn.topology import (
-    assign_static_clusters,
-    build_nodes_from_graph,
-    get_or_build_topology,
-)
+from ahbn.topology import assign_static_clusters, build_nodes_from_graph, get_or_build_topology
 from ahbn.utils import ResultRow, save_results_csv
 
 
-def build_ahbn_params(cfg: dict) -> AHBNParams:
-    """
-    Build AHBNParams from cfg["ahbn"] if present, otherwise use defaults.
-    This keeps the controller backward-compatible while allowing Exp09 tuning.
-    """
-    ahbn_cfg = cfg.get("ahbn", {})
-
-    return AHBNParams(
-        ewma_alpha=ahbn_cfg.get("ewma_alpha", 0.3),
-        d0=ahbn_cfg.get("d0", 0.2),
-        u0=ahbn_cfg.get("u0", 5.0),
-        l0=ahbn_cfg.get("l0", 2.0),
-        rho0=ahbn_cfg.get("rho0", 0.1),
-        deg0=ahbn_cfg.get("deg0", 8.0),
-        ov0=ahbn_cfg.get("ov0", 0.25),
-        r0=ahbn_cfg.get("r0", 0.35),
-        a_dup=ahbn_cfg.get("a_dup", -2.0),
-        a_load=ahbn_cfg.get("a_load", -1.5),
-        a_lat=ahbn_cfg.get("a_lat", 1.5),
-        a_churn=ahbn_cfg.get("a_churn", 1.0),
-        a_deg=ahbn_cfg.get("a_deg", -0.4),
-        a_ov=ahbn_cfg.get("a_ov", -1.2),
-        a_red=ahbn_cfg.get("a_red", -1.8),
-        b_degree=ahbn_cfg.get("b_degree", 0.25),
-        b_overlap=ahbn_cfg.get("b_overlap", 0.75),
-        min_fanout=ahbn_cfg.get("min_fanout", 1),
-        max_fanout=ahbn_cfg.get("max_fanout", 6),
-        mode_threshold=ahbn_cfg.get("mode_threshold", 0.5),
-        fanout_dup_penalty=ahbn_cfg.get("fanout_dup_penalty", 2.0),
-        fanout_load_penalty=ahbn_cfg.get("fanout_load_penalty", 0.5),
-        fanout_lat_reward=ahbn_cfg.get("fanout_lat_reward", 0.8),
-        fanout_red_penalty=ahbn_cfg.get("fanout_red_penalty", 1.5),
-        tau_max=ahbn_cfg.get("tau_max", 0.90),
-        tau_min=ahbn_cfg.get("tau_min", 0.25),
-        tau_dup_penalty=ahbn_cfg.get("tau_dup_penalty", 1.0),
-        tau_red_penalty=ahbn_cfg.get("tau_red_penalty", 1.5),
-        min_weight=ahbn_cfg.get("min_weight", 0.20),
-        max_weight=ahbn_cfg.get("max_weight", 0.80),
-    )
-
-
-def build_ahbn_strategy(cfg: dict, fanout: int | None = None) -> AHBNStrategy:
-    """
-    Build AHBNStrategy from cfg["ahbn"] if present.
-    """
-    ahbn_cfg = cfg.get("ahbn", {})
-
-    default_fanout = fanout if fanout is not None else ahbn_cfg.get("default_fanout", 3)
-
-    return AHBNStrategy(
-        default_fanout=default_fanout,
-        adaptive_fanout=ahbn_cfg.get("adaptive_fanout", False),
-        hybrid_mode=ahbn_cfg.get("hybrid_mode", True),
-        use_tau_gate=ahbn_cfg.get("use_tau_gate", True),
-        min_cluster_targets=ahbn_cfg.get("min_cluster_targets", 1),
-    )
-
-
 def run_single(
-    cfg: dict,
     strategy_name: str,
     seed: int,
     topology_type: str,
@@ -90,6 +27,7 @@ def run_single(
     ch_overload_factor: float | None = None,
     edge_prob: float | None = None,
     ba_m: int | None = None,
+    adaptive_fanout: bool = False,
 ) -> dict:
     graph = get_or_build_topology(
         topology_type=topology_type,
@@ -113,13 +51,14 @@ def run_single(
 
     elif strategy_name == "ahbn":
         cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters or 4)
-        controller = AHBNController(build_ahbn_params(cfg))
-        strategy = build_ahbn_strategy(cfg, fanout=fanout)
-
+        controller = AHBNController(AHBNParams())
+        strategy = AHBNStrategy(
+            default_fanout=fanout if fanout is not None else 3,
+            adaptive_fanout=adaptive_fanout,
+        )
     elif strategy_name == "hybrid_fixed":
         cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters or 4)
         strategy = HybridFixedStrategy(fanout=fanout if fanout is not None else 3)
-
     else:
         raise ValueError(f"Unknown strategy: {strategy_name}")
 
@@ -157,16 +96,17 @@ def exp07(cfg: dict) -> list[ResultRow]:
     edge_prob = cfg.get("edge_prob")
     ba_m = cfg.get("ba_m")
 
-    # Exp07 should compare real AHBN vs Gossip unless user explicitly overrides it
-    strategies = cfg.get("strategies", ["gossip", "ahbn"])
+    # Exp07 is a fanout sensitivity experiment.
+    # Therefore AHBN should respect the configured fanout directly.
+    adaptive_fanout = cfg.get("adaptive_fanout", False)
 
     for fanout in fanouts:
         for run_idx in range(runs_per_setting):
             seed = base_seed + run_idx
 
-            for strategy_name in strategies:
+            # for strategy_name in ["gossip", "ahbn"]:
+            for strategy_name in ["gossip", "hybrid_fixed"]:
                 summary = run_single(
-                    cfg=cfg,
                     strategy_name=strategy_name,
                     seed=seed,
                     topology_type=topology_type,
@@ -179,11 +119,13 @@ def exp07(cfg: dict) -> list[ResultRow]:
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
                     ba_m=ba_m,
+                    adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
                 )
                 rows.append(
                     ResultRow(
                         experiment="exp07",
-                        strategy=strategy_name,
+                        # strategy=strategy_name,
+                        strategy="ahbn" if strategy_name == "hybrid_fixed" else strategy_name,
                         seed=seed,
                         num_nodes=num_nodes,
                         topology_type=topology_type,
@@ -218,15 +160,15 @@ def exp08(cfg: dict) -> list[ResultRow]:
     edge_prob = cfg.get("edge_prob")
     ba_m = cfg.get("ba_m")
 
-    strategies = cfg.get("strategies", ["cluster", "ahbn"])
+    # For Exp08, adaptive fanout may be useful later if you want AHBN to behave adaptively.
+    adaptive_fanout = cfg.get("adaptive_fanout", True)
 
     for overload in overload_values:
         for run_idx in range(runs_per_setting):
             seed = base_seed + run_idx
 
-            for strategy_name in strategies:
+            for strategy_name in ["cluster", "ahbn"]:
                 summary = run_single(
-                    cfg=cfg,
                     strategy_name=strategy_name,
                     seed=seed,
                     topology_type=topology_type,
@@ -239,6 +181,7 @@ def exp08(cfg: dict) -> list[ResultRow]:
                     ch_overload_factor=overload,
                     edge_prob=edge_prob,
                     ba_m=ba_m,
+                    adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
                 )
                 rows.append(
                     ResultRow(
@@ -279,15 +222,16 @@ def exp09(cfg: dict) -> list[ResultRow]:
         raise ValueError("Exp09 density sweep is intended for ER topology.")
 
     edge_probs = cfg["edge_probs"]
-    strategies = cfg.get("strategies", ["gossip", "cluster", "ahbn"])
+
+    # For Exp09, you can choose whether AHBN should remain fixed-fanout or adaptive.
+    adaptive_fanout = cfg.get("adaptive_fanout", False)
 
     for edge_prob in edge_probs:
         for run_idx in range(runs_per_setting):
             seed = base_seed + run_idx
 
-            for strategy_name in strategies:
+            for strategy_name in ["gossip", "cluster", "ahbn"]:
                 summary = run_single(
-                    cfg=cfg,
                     strategy_name=strategy_name,
                     seed=seed,
                     topology_type="er",
@@ -299,6 +243,7 @@ def exp09(cfg: dict) -> list[ResultRow]:
                     fanout=fanout,
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
+                    adaptive_fanout=adaptive_fanout if strategy_name == "ahbn" else False,
                 )
                 rows.append(
                     ResultRow(

@@ -23,6 +23,7 @@ class Simulator:
         cluster_manager=None,
         controller: Optional[AHBNController] = None,
         ch_overload_factor: float = 1.0,
+        failure_injector=None,
     ) -> None:
         self.nodes = nodes
         self.strategy = strategy
@@ -38,15 +39,27 @@ class Simulator:
         self.controller = controller
         self.ch_overload_factor = ch_overload_factor
 
+        # Exp10 additions
+        self.failure_injector = failure_injector
+        self.message_source_id: Optional[int] = None
+
     def schedule_event(self, time: float, priority: int, event_type: str, payload: dict) -> None:
         heapq.heappush(self.queue, Event(time, priority, event_type, payload))
 
     def send_message(self, src_id: int, dst_id: int, message: Message, now: float) -> None:
+        src = self.nodes[src_id]
         dst = self.nodes[dst_id]
+
+        if not src.is_active or not dst.is_active:
+            return
+
         extra = 0.0
 
         if dst.is_cluster_head:
-            extra = self.base_delay * max(0.0, self.ch_overload_factor - 1.0)
+            extra += self.base_delay * max(0.0, self.ch_overload_factor - 1.0)
+
+        if dst.is_overloaded:
+            extra += dst.extra_delay
 
         delay = self.base_delay + self.rng.uniform(0.0, self.jitter) + extra
         self.schedule_event(
@@ -57,6 +70,8 @@ class Simulator:
         )
 
     def inject_message(self, source_id: int, message_id: str) -> None:
+        self.message_source_id = source_id
+
         msg = Message(message_id=message_id, source_id=source_id, created_at=self.clock)
         self.metrics.register_message(message_id, source_id, self.clock)
         self.schedule_event(
@@ -73,10 +88,6 @@ class Simulator:
         return len(node.neighbors)
 
     def get_neighbor_overlap(self, node: Node) -> float:
-        """
-        Average Jaccard overlap between the node's neighbor set and each neighbor's set.
-        This is a local redundancy signal for Exp09 dense-topology control.
-        """
         nbrs = set(node.neighbors)
         if not nbrs:
             return 0.0
@@ -96,10 +107,6 @@ class Simulator:
         return sum(vals) / len(vals)
 
     def get_redundancy_proxy(self, node: Node) -> float:
-        """
-        Combined local redundancy pressure.
-        You can tune the weights later from config/controller defaults.
-        """
         if self.controller is None:
             return 0.0
 
@@ -122,11 +129,9 @@ class Simulator:
             node.stats.received_duplicate / total_recv if total_recv > 0 else 0.0
         )
 
-        # Existing proxies
         load_proxy = float(node.stats.forwarded)
         latency_proxy = receive_lag
 
-        # New Exp09 topology-aware proxies
         degree_proxy = float(self.get_node_degree(node))
         overlap_proxy = self.get_neighbor_overlap(node)
         redundancy_proxy = self.get_redundancy_proxy(node)
@@ -146,6 +151,9 @@ class Simulator:
     def handle_receive(self, now: float, dst_id: int, src_id: int, message: Message) -> None:
         self.clock = now
         node = self.nodes[dst_id]
+
+        if not node.is_active:
+            return
 
         if node.has_seen(message.message_id):
             node.stats.received_duplicate += 1
@@ -175,6 +183,14 @@ class Simulator:
             event = heapq.heappop(self.queue)
             if event.time > until:
                 break
+
+            self.clock = event.time
+
+            if self.failure_injector is not None and self.failure_injector.should_trigger(self.clock):
+                self.failure_injector.apply(self)
+
+            if self.failure_injector is not None and self.failure_injector.should_clear_overload(self.clock):
+                self.failure_injector.clear(self)
 
             if event.event_type == "receive":
                 self.handle_receive(

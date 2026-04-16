@@ -6,52 +6,35 @@ from ahbn.message import Message
 from ahbn.node import Node
 from ahbn.strategies.base import ForwardingStrategy
 
+
 class ClusterStrategy(ForwardingStrategy):
+    """
+    Structured cluster dissemination baseline.
+
+    Interpretation:
+    - Member nodes forward upward to their cluster head.
+    - Cluster heads disseminate downward to their members and outward
+      to gateway/peer heads.
+
+    This is implemented as a logical structured overlay baseline,
+    not a strict one-hop physical-neighbor-only protocol.
+    """
+
     def select_targets(self, node: Node, message: Message, simulator) -> List[int]:
         cluster_mgr = simulator.cluster_manager
         if cluster_mgr is None:
             return []
 
-
         if node.is_cluster_head:
-            members = [
-                m for m in cluster_mgr.get_cluster_members(node.cluster_id, exclude=node.node_id)
-                if m in node.neighbors
-            ]
-            gateways = [g for g in node.gateway_neighbors if g in node.neighbors]
+            members = cluster_mgr.get_cluster_members(
+                node.cluster_id,
+                exclude=node.node_id,
+            )
+            gateways = list(node.gateway_neighbors)
             return list(dict.fromkeys(members + gateways))
 
         ch_id = cluster_mgr.get_cluster_head(node.cluster_id)
-        if ch_id is not None and ch_id != node.node_id and ch_id in node.neighbors:
+        if ch_id is not None and ch_id != node.node_id:
             return [ch_id]
+
         return []
-
-        # if node.is_cluster_head:
-        #     members = [
-        #         m for m in cluster_mgr.get_cluster_members(node.cluster_id, exclude=node.node_id)
-        #         if m in node.neighbors
-        #     ]
-        #     gateways = [g for g in node.gateway_neighbors if g in node.neighbors]
-        #     return list(dict.fromkeys(members + gateways))
-
-        # ch_id = cluster_mgr.get_cluster_head(node.cluster_id)
-        # if ch_id is not None and ch_id != node.node_id and ch_id in node.neighbors:
-        #     return [ch_id]
-        # return []
-
-
-# class ClusterStrategy(ForwardingStrategy):
-#     def select_targets(self, node: Node, message: Message, simulator) -> List[int]:
-#         cluster_mgr = simulator.cluster_manager
-#         if cluster_mgr is None:
-#             return []
-
-#         if node.is_cluster_head:
-#             members = cluster_mgr.get_cluster_members(node.cluster_id, exclude=node.node_id)
-#             gateways = list(node.gateway_neighbors)
-#             return list(dict.fromkeys(members + gateways))
-
-#         ch_id = cluster_mgr.get_cluster_head(node.cluster_id)
-#         if ch_id is not None and ch_id != node.node_id:
-#             return [ch_id]
-#         return []

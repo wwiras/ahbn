@@ -325,6 +325,95 @@ def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     print(f"Saved {out}")
 
+# -----------------------------
+# Exp10
+# -----------------------------
+def plot_exp10(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
+    ensure_dir("outputs/plots")
+
+    grouped = (
+        df.groupby(["strategy", "failure_mode"])
+        .agg(
+            delay_mean=("propagation_delay", "mean"),
+            delivery_mean=("delivery_ratio", "mean"),
+            dup_mean=("duplicates", "mean"),
+            recovery_mean=("recovery_time", "mean"),
+        )
+        .reset_index()
+    )
+
+    strategies = grouped["strategy"].unique()
+    failure_modes = list(df["failure_mode"].dropna().unique())
+
+    if use_offset:
+        offsets = {"gossip": -0.06, "cluster": 0.0, "ahbn": 0.06}
+    else:
+        offsets = {s: 0.0 for s in strategies}
+
+    x_pos = list(range(len(failure_modes)))
+    x_map = {mode: idx for idx, mode in enumerate(failure_modes)}
+
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.5))
+
+    # Delay
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].copy()
+        part["x"] = part["failure_mode"].map(x_map).astype(float) + offsets.get(s, 0.0)
+        part = part.sort_values("x")
+        axes[0, 0].plot(part["x"], part["delay_mean"], marker="o", label=s)
+    axes[0, 0].set_title("Delay vs Failure Mode")
+    axes[0, 0].set_ylabel("Propagation Delay")
+    axes[0, 0].set_xticks(x_pos)
+    axes[0, 0].set_xticklabels(failure_modes)
+    axes[0, 0].grid(True, linestyle=":")
+    axes[0, 0].legend()
+
+    # Delivery
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].copy()
+        part["x"] = part["failure_mode"].map(x_map).astype(float) + offsets.get(s, 0.0)
+        part = part.sort_values("x")
+        axes[0, 1].plot(part["x"], part["delivery_mean"], marker="o", label=s)
+    axes[0, 1].set_title("Delivery Ratio vs Failure Mode")
+    axes[0, 1].set_ylabel("Delivery Ratio")
+    axes[0, 1].set_xticks(x_pos)
+    axes[0, 1].set_xticklabels(failure_modes)
+    axes[0, 1].grid(True, linestyle=":")
+    axes[0, 1].legend()
+
+    # Duplicates
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].copy()
+        part["x"] = part["failure_mode"].map(x_map).astype(float) + offsets.get(s, 0.0)
+        part = part.sort_values("x")
+        axes[1, 0].plot(part["x"], part["dup_mean"], marker="o", label=s)
+    axes[1, 0].set_title("Duplicates vs Failure Mode")
+    axes[1, 0].set_ylabel("Duplicates")
+    axes[1, 0].set_xticks(x_pos)
+    axes[1, 0].set_xticklabels(failure_modes)
+    axes[1, 0].grid(True, linestyle=":")
+    axes[1, 0].legend()
+
+    # Recovery
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].copy()
+        part["x"] = part["failure_mode"].map(x_map).astype(float) + offsets.get(s, 0.0)
+        part = part.sort_values("x")
+        axes[1, 1].plot(part["x"], part["recovery_mean"], marker="o", label=s)
+    axes[1, 1].set_title("Recovery Time vs Failure Mode")
+    axes[1, 1].set_ylabel("Recovery Time")
+    axes[1, 1].set_xticks(x_pos)
+    axes[1, 1].set_xticklabels(failure_modes)
+    axes[1, 1].grid(True, linestyle=":")
+    axes[1, 1].legend()
+
+    plt.tight_layout()
+    out = get_plot_output_path("exp10", ts)
+    plt.savefig(out, bbox_inches="tight")
+    plt.close()
+
+    print(f"Saved {out}")
+
 
 # -----------------------------
 # Main
@@ -345,6 +434,8 @@ def main(path: str, use_offset: bool) -> None:
         plot_exp08(df, ts, use_offset)
     elif experiment == "exp09":
         plot_exp09(df, ts, use_offset)
+    elif experiment == "exp10":
+        plot_exp10(df, ts, use_offset=args.offset)
     else:
         raise ValueError(f"Unknown experiment: {experiment}")
 

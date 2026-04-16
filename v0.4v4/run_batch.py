@@ -4,6 +4,7 @@ import argparse
 
 from ahbn.config import load_yaml_config
 from ahbn.control import AHBNController, AHBNParams
+from ahbn.failure_injector import FailureInjector
 from ahbn.simulator import Simulator
 from ahbn.strategies.ahbn import AHBNStrategy
 from ahbn.strategies.cluster import ClusterStrategy
@@ -18,10 +19,6 @@ from ahbn.utils import ResultRow, save_results_csv
 
 
 def build_ahbn_params(cfg: dict) -> AHBNParams:
-    """
-    Build AHBNParams from cfg["ahbn"] if present, otherwise use defaults.
-    This keeps the controller backward-compatible while allowing Exp09 tuning.
-    """
     ahbn_cfg = cfg.get("ahbn", {})
 
     return AHBNParams(
@@ -59,11 +56,7 @@ def build_ahbn_params(cfg: dict) -> AHBNParams:
 
 
 def build_ahbn_strategy(cfg: dict, fanout: int | None = None) -> AHBNStrategy:
-    """
-    Build AHBNStrategy from cfg["ahbn"] if present.
-    """
     ahbn_cfg = cfg.get("ahbn", {})
-
     default_fanout = fanout if fanout is not None else ahbn_cfg.get("default_fanout", 3)
 
     return AHBNStrategy(
@@ -90,6 +83,7 @@ def run_single(
     ch_overload_factor: float | None = None,
     edge_prob: float | None = None,
     ba_m: int | None = None,
+    failure_mode: str | None = None,
 ) -> dict:
     graph = get_or_build_topology(
         topology_type=topology_type,
@@ -123,6 +117,14 @@ def run_single(
     else:
         raise ValueError(f"Unknown strategy: {strategy_name}")
 
+    local_cfg = dict(cfg)
+    if failure_mode is not None:
+        local_failure = dict(cfg.get("failure", {}))
+        local_failure["mode"] = failure_mode
+        local_cfg["failure"] = local_failure
+
+    failure_injector = FailureInjector(local_cfg, seed=seed)
+
     sim = Simulator(
         nodes=nodes,
         strategy=strategy,
@@ -132,6 +134,7 @@ def run_single(
         cluster_manager=cluster_manager,
         controller=controller,
         ch_overload_factor=ch_overload_factor if ch_overload_factor is not None else 1.0,
+        failure_injector=failure_injector,
     )
 
     sim.inject_message(source_id=message_source, message_id="m1")
@@ -157,7 +160,6 @@ def exp07(cfg: dict) -> list[ResultRow]:
     edge_prob = cfg.get("edge_prob")
     ba_m = cfg.get("ba_m")
 
-    # Exp07 should compare real AHBN vs Gossip unless user explicitly overrides it
     strategies = cfg.get("strategies", ["gossip", "ahbn"])
 
     for fanout in fanouts:
@@ -320,6 +322,73 @@ def exp09(cfg: dict) -> list[ResultRow]:
     return rows
 
 
+def exp10(cfg: dict) -> list[dict]:
+    rows: list[dict] = []
+
+    base_seed = cfg["seed"]
+    runs_per_setting = cfg["runs_per_setting"]
+    num_nodes = cfg["num_nodes"]
+    topology_type = cfg["topology_type"]
+    use_topology_cache = cfg.get("use_topology_cache", True)
+
+    base_delay = cfg.get("base_delay", 1.0)
+    jitter = cfg.get("jitter", 0.2)
+    source_id = cfg.get("message_source", 0)
+    fanout = cfg.get("fanout", 3)
+    num_clusters = cfg.get("num_clusters", 4)
+
+    edge_prob = cfg.get("edge_prob")
+    ba_m = cfg.get("ba_m")
+
+    strategies = cfg.get("strategies", ["gossip", "cluster", "ahbn"])
+    failure_modes = cfg.get("failure_modes", ["node_failure", "ch_failure", "overload"])
+
+    for failure_mode in failure_modes:
+        for run_idx in range(runs_per_setting):
+            seed = base_seed + run_idx
+
+            for strategy_name in strategies:
+                summary = run_single(
+                    cfg=cfg,
+                    strategy_name=strategy_name,
+                    seed=seed,
+                    topology_type=topology_type,
+                    num_nodes=num_nodes,
+                    use_topology_cache=use_topology_cache,
+                    base_delay=base_delay,
+                    jitter=jitter,
+                    message_source=source_id,
+                    fanout=fanout,
+                    num_clusters=num_clusters,
+                    edge_prob=edge_prob,
+                    ba_m=ba_m,
+                    failure_mode=failure_mode,
+                )
+
+                rows.append(
+                    {
+                        "experiment": "exp10",
+                        "strategy": strategy_name,
+                        "seed": seed,
+                        "num_nodes": num_nodes,
+                        "topology_type": topology_type,
+                        "topology_param": edge_prob if topology_type == "er" else ba_m,
+                        "fanout": fanout if strategy_name != "cluster" else None,
+                        "num_clusters": num_clusters,
+                        "ch_overload_factor": None,
+                        "failure_mode": summary["failure_mode"],
+                        "failed_node_id": summary["failed_node_id"],
+                        "delivery_ratio": summary["delivery_ratio"],
+                        "propagation_delay": summary["propagation_delay"],
+                        "duplicates": summary["duplicates"],
+                        "total_forwards": summary["total_forwards"],
+                        "recovery_time": summary["recovery_time"],
+                    }
+                )
+
+    return rows
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -343,8 +412,22 @@ def main() -> None:
         path = save_results_csv(rows, "outputs/csv/exp09_results.csv")
         print(f"Saved {path}")
 
+    elif experiment == "exp10":
+        import pandas as pd
+        from pathlib import Path
+
+        rows = exp10(cfg)
+        out = Path("outputs/csv")
+        out.mkdir(parents=True, exist_ok=True)
+
+        from ahbn.utils import current_timestamp
+        ts = current_timestamp()
+        path = out / f"exp10_results_{ts}.csv"
+        pd.DataFrame(rows).to_csv(path, index=False)
+        print(f"Saved {path}")
+
     else:
-        raise ValueError(f"Unknown experiment: {experiment}")
+        raise ValueError(f"Unsupported experiment: {experiment}")
 
 
 if __name__ == "__main__":

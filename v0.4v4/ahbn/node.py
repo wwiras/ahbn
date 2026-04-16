@@ -29,8 +29,28 @@ class Node:
     stats: NodeStats = field(default_factory=NodeStats)
     control: NodeControlState = field(default_factory=NodeControlState)
 
+    # Exp10 additions
+    is_active: bool = True
+    is_overloaded: bool = False
+    extra_delay: float = 0.0
+
     def has_seen(self, message_id: str) -> bool:
         return message_id in self.seen_messages
 
     def mark_seen(self, message_id: str) -> None:
         self.seen_messages.add(message_id)
+
+    # Exp10 additions
+    def fail(self) -> None:
+        self.is_active = False
+
+    def recover(self) -> None:
+        self.is_active = True
+
+    def set_overload(self, extra_delay: float) -> None:
+        self.is_overloaded = True
+        self.extra_delay = max(0.0, extra_delay)
+
+    def clear_overload(self) -> None:
+        self.is_overloaded = False
+        self.extra_delay = 0.0

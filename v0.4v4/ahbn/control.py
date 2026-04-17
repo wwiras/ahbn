@@ -190,3 +190,18 @@ class AHBNController:
         )
         state.fanout = max(p.min_fanout, min(p.max_fanout, raw))
         state.tau = self.compute_tau(state)
+        
+    def snapshot_state(self, state: NodeControlState) -> dict:
+        return {
+            "mode": state.mode,
+            "weight": state.weight,
+            "fanout": state.fanout,
+            "tau": state.tau,
+            "d_hat": state.d_hat,
+            "u_hat": state.u_hat,
+            "l_hat": state.l_hat,
+            "rho_hat": state.rho_hat,
+            "deg_hat": state.deg_hat,
+            "ov_hat": state.ov_hat,
+            "r_hat": state.r_hat,
+        }

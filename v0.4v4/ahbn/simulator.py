@@ -10,6 +10,7 @@ from ahbn.message import Message
 from ahbn.metrics import MetricsCollector
 from ahbn.node import Node
 from ahbn.strategies.base import ForwardingStrategy
+from ahbn.utils import AdaptiveTraceRow
 
 
 class Simulator:
@@ -24,6 +25,10 @@ class Simulator:
         controller: Optional[AHBNController] = None,
         ch_overload_factor: float = 1.0,
         failure_injector=None,
+        experiment_name: str = "unknown",
+        strategy_name: str = "unknown",
+        scenario_tag: str = "default",
+        enable_adaptive_trace: bool = False,
     ) -> None:
         self.nodes = nodes
         self.strategy = strategy
@@ -42,6 +47,13 @@ class Simulator:
         # Exp10 additions
         self.failure_injector = failure_injector
         self.message_source_id: Optional[int] = None
+
+        # Adaptive trace logging
+        self.experiment_name = experiment_name
+        self.strategy_name = strategy_name
+        self.scenario_tag = scenario_tag
+        self.enable_adaptive_trace = enable_adaptive_trace
+        self.adaptive_trace_rows: list[AdaptiveTraceRow] = []
 
     def schedule_event(self, time: float, priority: int, event_type: str, payload: dict) -> None:
         heapq.heappush(self.queue, Event(time, priority, event_type, payload))
@@ -79,6 +91,51 @@ class Simulator:
             priority=0,
             event_type="receive",
             payload={"dst_id": source_id, "src_id": source_id, "message": msg},
+        )
+
+    # ------------------------------------------------------------------
+    # Adaptive trace helper
+    # ------------------------------------------------------------------
+    def log_adaptive_trace(
+        self,
+        node: Node,
+        event_type: str,
+        message: Optional[Message] = None,
+    ) -> None:
+        if not self.enable_adaptive_trace:
+            return
+
+        if self.controller is None:
+            return
+
+        snap = self.controller.snapshot_state(node.control)
+
+        self.adaptive_trace_rows.append(
+            AdaptiveTraceRow(
+                experiment=self.experiment_name,
+                strategy=self.strategy_name,
+                seed=self.seed,
+                scenario_tag=self.scenario_tag,
+                time=self.clock,
+                node_id=node.node_id,
+                message_id=message.message_id if message is not None else None,
+                event_type=event_type,
+                mode=snap["mode"],
+                fanout=snap["fanout"],
+                weight=snap["weight"],
+                tau=snap["tau"],
+                dup_ratio_raw=node.stats.duplicate_ratio_raw,
+                d_hat=snap["d_hat"],
+                l_hat=snap["l_hat"],
+                rho_hat=snap["rho_hat"],
+                u_hat=snap["u_hat"],
+                deg_hat=snap["deg_hat"],
+                ov_hat=snap["ov_hat"],
+                r_hat=snap["r_hat"],
+                received_new=node.stats.received_new,
+                received_duplicate=node.stats.received_duplicate,
+                forwarded=node.stats.forwarded,
+            )
         )
 
     # ------------------------------------------------------------------
@@ -148,6 +205,8 @@ class Simulator:
         )
         self.controller.decide_mode_and_fanout(node.control)
 
+        self.log_adaptive_trace(node, event_type="control_update")
+
     def handle_receive(self, now: float, dst_id: int, src_id: int, message: Message) -> None:
         self.clock = now
         node = self.nodes[dst_id]
@@ -159,6 +218,7 @@ class Simulator:
             node.stats.received_duplicate += 1
             self.metrics.record_duplicate(message.message_id)
             self.update_ahbn_state(node, now, now - message.created_at)
+            self.log_adaptive_trace(node, event_type="duplicate_drop", message=message)
             return
 
         node.mark_seen(message.message_id)
@@ -168,6 +228,7 @@ class Simulator:
         self.metrics.record_first_seen(node.node_id, message.message_id, now)
 
         self.update_ahbn_state(node, now, now - message.created_at)
+        self.log_adaptive_trace(node, event_type="new_receive", message=message)
 
         targets = self.strategy.select_targets(node, message, self)
         unique_targets = [t for t in dict.fromkeys(targets) if t != node.node_id]
@@ -177,6 +238,7 @@ class Simulator:
 
         node.stats.forwarded += len(unique_targets)
         self.metrics.record_forward(message.message_id, len(unique_targets))
+        self.log_adaptive_trace(node, event_type="forward_decision", message=message)
 
     def run(self, until: float = 1000.0) -> None:
         while self.queue:

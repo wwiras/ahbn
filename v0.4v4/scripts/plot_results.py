@@ -35,6 +35,35 @@ def get_plot_output_path(experiment: str, timestamp: str) -> str:
 def get_exp07_3panel_output_path(timestamp: str) -> str:
     return f"outputs/plots/exp07_3panel_{timestamp}.png"
 
+def get_adaptive_plot_output_path(experiment: str, timestamp: str) -> str:
+    return f"outputs/plots/{experiment}_adaptive_{timestamp}.png"
+
+def make_time_bins(df: pd.DataFrame, bin_width: float = 0.25) -> pd.DataFrame:
+    out = df.copy()
+    out["time_bin"] = (out["time"] / bin_width).round().astype(float) * bin_width
+    return out
+
+
+def mode_fraction_by_bin(df: pd.DataFrame) -> pd.DataFrame:
+    mode_counts = (
+        df.groupby(["time_bin", "mode"])["node_id"]
+        .nunique()
+        .unstack(fill_value=0)
+        .reset_index()
+    )
+
+    if "gossip" not in mode_counts.columns:
+        mode_counts["gossip"] = 0
+    if "cluster" not in mode_counts.columns:
+        mode_counts["cluster"] = 0
+
+    total = mode_counts["gossip"] + mode_counts["cluster"]
+    total = total.replace(0, 1)
+
+    mode_counts["gossip_frac"] = mode_counts["gossip"] / total
+    mode_counts["cluster_frac"] = mode_counts["cluster"] / total
+    return mode_counts.sort_values("time_bin")
+
 
 # -----------------------------
 # Exp07
@@ -415,6 +444,139 @@ def plot_exp10(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     print(f"Saved {out}")
 
 
+def plot_adaptive_behavior(df: pd.DataFrame, ts: str) -> None:
+    ensure_dir("outputs/plots")
+
+    required_cols = {
+        "experiment",
+        "strategy",
+        "time",
+        "node_id",
+        "fanout",
+        "mode",
+        "d_hat",
+        "event_type",
+    }
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"Adaptive trace CSV is missing columns: {sorted(missing)}")
+
+    df = df[df["strategy"] == "ahbn"].copy()
+    if df.empty:
+        raise ValueError("Adaptive trace CSV contains no AHBN rows.")
+
+    # Keep only the most meaningful adaptive-state events.
+    # This reduces clutter from repeated duplicate/new_receive rows.
+    df = df[df["event_type"].isin(["control_update", "forward_decision"])].copy()
+    if df.empty:
+        raise ValueError("No adaptive control events found after filtering.")
+
+    # Sort and bin time to make the figure readable.
+    df = df.sort_values(["time", "node_id"])
+    df = make_time_bins(df, bin_width=0.25)
+
+    # To avoid counting multiple updates from the same node in the same time bin,
+    # keep the last observed state per node per bin.
+    df_last = (
+        df.groupby(["time_bin", "node_id"], as_index=False)
+        .last()
+        .sort_values(["time_bin", "node_id"])
+    )
+
+    # 1) Mean fanout per time bin
+    fanout_df = (
+        df_last.groupby("time_bin", as_index=False)
+        .agg(
+            mean_fanout=("fanout", "mean"),
+            fanout_min=("fanout", "min"),
+            fanout_max=("fanout", "max"),
+        )
+        .sort_values("time_bin")
+    )
+
+    # 2) Mean duplication state per time bin
+    dup_df = (
+        df_last.groupby("time_bin", as_index=False)
+        .agg(
+            mean_dhat=("d_hat", "mean"),
+            dmin=("d_hat", "min"),
+            dmax=("d_hat", "max"),
+        )
+        .sort_values("time_bin")
+    )
+
+    # 3) Mode fraction per time bin
+    mode_df = mode_fraction_by_bin(df_last)
+
+    fig, axes = plt.subplots(3, 1, figsize=(10.5, 9.0), sharex=True)
+
+    # -------------------------
+    # Fanout panel
+    # -------------------------
+    axes[0].plot(
+        fanout_df["time_bin"],
+        fanout_df["mean_fanout"],
+        marker="o",
+        linewidth=1.8,
+        label="mean fanout",
+    )
+    axes[0].fill_between(
+        fanout_df["time_bin"],
+        fanout_df["fanout_min"],
+        fanout_df["fanout_max"],
+        alpha=0.20,
+    )
+    axes[0].set_ylabel("Mean Fanout")
+    axes[0].set_title("Adaptive Fanout Over Time")
+    axes[0].grid(True, linestyle=":")
+    axes[0].legend()
+
+    # -------------------------
+    # Duplication panel
+    # -------------------------
+    axes[1].plot(
+        dup_df["time_bin"],
+        dup_df["mean_dhat"],
+        marker="o",
+        linewidth=1.8,
+        label="mean $\\hat{d}$",
+    )
+    axes[1].fill_between(
+        dup_df["time_bin"],
+        dup_df["dmin"],
+        dup_df["dmax"],
+        alpha=0.20,
+    )
+    axes[1].set_ylabel("Mean $\\hat{d}$")
+    axes[1].set_title("Duplication Dynamics Over Time")
+    axes[1].grid(True, linestyle=":")
+    axes[1].legend()
+
+    # -------------------------
+    # Mode switching panel
+    # -------------------------
+    axes[2].stackplot(
+        mode_df["time_bin"],
+        mode_df["gossip_frac"],
+        mode_df["cluster_frac"],
+        labels=["gossip", "cluster"],
+        alpha=0.85,
+    )
+    axes[2].set_xlabel("Simulation Time")
+    axes[2].set_ylabel("Mode Fraction")
+    axes[2].set_title("Dissemination Mode Usage Over Time")
+    axes[2].set_ylim(0.0, 1.0)
+    axes[2].grid(True, linestyle=":")
+    axes[2].legend(loc="upper right")
+
+    plt.tight_layout()
+    experiment = df["experiment"].iloc[0]
+    out = get_adaptive_plot_output_path(experiment, ts)
+    plt.savefig(out, bbox_inches="tight")
+    plt.close()
+
+    print(f"Saved {out}")
+
 # -----------------------------
 # Main
 # -----------------------------
@@ -424,6 +586,12 @@ def main(path: str, use_offset: bool) -> None:
 
     if "experiment" not in df.columns:
         raise ValueError("CSV must contain an 'experiment' column")
+
+    adaptive_trace_cols = {"time", "node_id", "fanout", "mode", "d_hat"}
+    if adaptive_trace_cols.issubset(df.columns):
+        plot_adaptive_behavior(df, ts)
+        print(f"Adaptive plots saved with timestamp: {ts}")
+        return
 
     experiment = df["experiment"].iloc[0]
     df = df[df["experiment"] == experiment].copy()
@@ -440,6 +608,7 @@ def main(path: str, use_offset: bool) -> None:
         raise ValueError(f"Unknown experiment: {experiment}")
 
     print(f"Plots saved (offset={use_offset}) with timestamp: {ts}")
+
 
 
 if __name__ == "__main__":

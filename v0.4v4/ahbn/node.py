@@ -15,6 +15,17 @@ class NodeStats:
     first_receive_time: Dict[str, float] = field(default_factory=dict)
     last_receive_time: Dict[str, float] = field(default_factory=dict)
 
+    @property
+    def total_received(self) -> int:
+        return self.received_new + self.received_duplicate
+
+    @property
+    def duplicate_ratio_raw(self) -> float:
+        total = self.total_received
+        if total <= 0:
+            return 0.0
+        return self.received_duplicate / total
+
 
 @dataclass
 class Node:

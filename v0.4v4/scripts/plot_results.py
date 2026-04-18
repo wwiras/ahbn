@@ -35,8 +35,10 @@ def get_plot_output_path(experiment: str, timestamp: str) -> str:
 def get_exp07_3panel_output_path(timestamp: str) -> str:
     return f"outputs/plots/exp07_3panel_{timestamp}.png"
 
+
 def get_adaptive_plot_output_path(experiment: str, timestamp: str) -> str:
     return f"outputs/plots/{experiment}_adaptive_{timestamp}.png"
+
 
 def make_time_bins(df: pd.DataFrame, bin_width: float = 0.25) -> pd.DataFrame:
     out = df.copy()
@@ -90,7 +92,6 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
             f"This plotting script is intended for exp07."
         )
 
-    # Keep only AHBN vs Gossip to match the exp08/exp09 comparison style
     df_compare = df[df["strategy"].isin(["gossip", "ahbn"])].copy()
 
     grouped_compare = (
@@ -113,12 +114,8 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     x_ticks = sorted(df_compare["fanout"].dropna().unique())
 
-    # -----------------------------
-    # 2-panel combined figure
-    # -----------------------------
     fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
 
-    # Delay subplot
     for s in strategies:
         part = grouped_compare[grouped_compare["strategy"] == s].sort_values("fanout")
         x = apply_offset(part["fanout"], offsets[s])
@@ -131,7 +128,6 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     axes[0].legend()
     axes[0].grid(True, linestyle=":")
 
-    # Duplicates subplot
     for s in strategies:
         part = grouped_compare[grouped_compare["strategy"] == s].sort_values("fanout")
         x = apply_offset(part["fanout"], offsets[s])
@@ -151,9 +147,6 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     print(f"Saved {out_combined}")
 
-    # -----------------------------
-    # Optional exp07 full 3-panel figure
-    # -----------------------------
     grouped_full = (
         df.groupby(["fanout", "strategy"], as_index=False)[
             ["delivery_ratio", "propagation_delay", "duplicates"]
@@ -170,7 +163,6 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     fig3, axes3 = plt.subplots(1, 3, figsize=(18, 5))
 
-    # Delivery Ratio
     ax = axes3[0]
     for strategy in full_strategies:
         subset = grouped_full[grouped_full["strategy"] == strategy]
@@ -186,7 +178,6 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     ax.grid(True, linestyle=":")
     ax.legend()
 
-    # Delay
     ax = axes3[1]
     for strategy in full_strategies:
         subset = grouped_full[grouped_full["strategy"] == strategy]
@@ -202,7 +193,6 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     ax.grid(True, linestyle=":")
     ax.legend()
 
-    # Duplicates
     ax = axes3[2]
     for strategy in full_strategies:
         subset = grouped_full[grouped_full["strategy"] == strategy]
@@ -250,7 +240,6 @@ def plot_exp08(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
 
-    # Delay subplot
     for s in strategies:
         part = grouped[grouped["strategy"] == s].sort_values("ch_overload_factor")
         x = apply_offset(part["ch_overload_factor"], offsets[s])
@@ -263,7 +252,6 @@ def plot_exp08(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     axes[0].legend()
     axes[0].grid(True, linestyle=":")
 
-    # Delivery subplot
     for s in strategies:
         part = grouped[grouped["strategy"] == s].sort_values("ch_overload_factor")
         x = apply_offset(part["ch_overload_factor"], offsets[s])
@@ -321,7 +309,6 @@ def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     fig, axes = plt.subplots(1, 2, figsize=(10.8, 4.2))
 
-    # Duplicates subplot
     for s in strategies:
         part = grouped[grouped["strategy"] == s].sort_values("topology_param")
         x = apply_offset(part["topology_param"], offsets.get(s, 0.0))
@@ -334,7 +321,6 @@ def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     axes[0].legend()
     axes[0].grid(True, linestyle=":")
 
-    # Delay subplot
     for s in strategies:
         part = grouped[grouped["strategy"] == s].sort_values("topology_param")
         x = apply_offset(part["topology_param"], offsets.get(s, 0.0))
@@ -353,6 +339,7 @@ def plot_exp09(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     plt.close()
 
     print(f"Saved {out}")
+
 
 # -----------------------------
 # Exp10
@@ -384,7 +371,6 @@ def plot_exp10(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.5))
 
-    # Delay
     for s in strategies:
         part = grouped[grouped["strategy"] == s].copy()
         part["x"] = part["failure_mode"].map(x_map).astype(float) + offsets.get(s, 0.0)
@@ -397,7 +383,6 @@ def plot_exp10(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     axes[0, 0].grid(True, linestyle=":")
     axes[0, 0].legend()
 
-    # Delivery
     for s in strategies:
         part = grouped[grouped["strategy"] == s].copy()
         part["x"] = part["failure_mode"].map(x_map).astype(float) + offsets.get(s, 0.0)
@@ -410,7 +395,6 @@ def plot_exp10(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     axes[0, 1].grid(True, linestyle=":")
     axes[0, 1].legend()
 
-    # Duplicates
     for s in strategies:
         part = grouped[grouped["strategy"] == s].copy()
         part["x"] = part["failure_mode"].map(x_map).astype(float) + offsets.get(s, 0.0)
@@ -423,7 +407,6 @@ def plot_exp10(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
     axes[1, 0].grid(True, linestyle=":")
     axes[1, 0].legend()
 
-    # Recovery
     for s in strategies:
         part = grouped[grouped["strategy"] == s].copy()
         part["x"] = part["failure_mode"].map(x_map).astype(float) + offsets.get(s, 0.0)
@@ -465,25 +448,19 @@ def plot_adaptive_behavior(df: pd.DataFrame, ts: str) -> None:
     if df.empty:
         raise ValueError("Adaptive trace CSV contains no AHBN rows.")
 
-    # Keep only the most meaningful adaptive-state events.
-    # This reduces clutter from repeated duplicate/new_receive rows.
-    df = df[df["event_type"].isin(["control_update", "forward_decision"])].copy()
+    df = df[df["event_type"].isin(["control_update", "forward_decision", "churn_control_update"])].copy()
     if df.empty:
         raise ValueError("No adaptive control events found after filtering.")
 
-    # Sort and bin time to make the figure readable.
     df = df.sort_values(["time", "node_id"])
     df = make_time_bins(df, bin_width=0.25)
 
-    # To avoid counting multiple updates from the same node in the same time bin,
-    # keep the last observed state per node per bin.
     df_last = (
         df.groupby(["time_bin", "node_id"], as_index=False)
         .last()
         .sort_values(["time_bin", "node_id"])
     )
 
-    # 1) Mean fanout per time bin
     fanout_df = (
         df_last.groupby("time_bin", as_index=False)
         .agg(
@@ -494,7 +471,6 @@ def plot_adaptive_behavior(df: pd.DataFrame, ts: str) -> None:
         .sort_values("time_bin")
     )
 
-    # 2) Mean duplication state per time bin
     dup_df = (
         df_last.groupby("time_bin", as_index=False)
         .agg(
@@ -505,14 +481,20 @@ def plot_adaptive_behavior(df: pd.DataFrame, ts: str) -> None:
         .sort_values("time_bin")
     )
 
-    # 3) Mode fraction per time bin
+    churn_df = (
+        df_last.groupby("time_bin", as_index=False)
+        .agg(
+            mean_rhohat=("rho_hat", "mean"),
+            rhomin=("rho_hat", "min"),
+            rhomax=("rho_hat", "max"),
+        )
+        .sort_values("time_bin")
+    )
+
     mode_df = mode_fraction_by_bin(df_last)
 
-    fig, axes = plt.subplots(3, 1, figsize=(10.5, 9.0), sharex=True)
+    fig, axes = plt.subplots(4, 1, figsize=(10.5, 11.5), sharex=True)
 
-    # -------------------------
-    # Fanout panel
-    # -------------------------
     axes[0].plot(
         fanout_df["time_bin"],
         fanout_df["mean_fanout"],
@@ -531,9 +513,6 @@ def plot_adaptive_behavior(df: pd.DataFrame, ts: str) -> None:
     axes[0].grid(True, linestyle=":")
     axes[0].legend()
 
-    # -------------------------
-    # Duplication panel
-    # -------------------------
     axes[1].plot(
         dup_df["time_bin"],
         dup_df["mean_dhat"],
@@ -552,22 +531,37 @@ def plot_adaptive_behavior(df: pd.DataFrame, ts: str) -> None:
     axes[1].grid(True, linestyle=":")
     axes[1].legend()
 
-    # -------------------------
-    # Mode switching panel
-    # -------------------------
-    axes[2].stackplot(
+    axes[2].plot(
+        churn_df["time_bin"],
+        churn_df["mean_rhohat"],
+        marker="o",
+        linewidth=1.8,
+        label="mean $\\hat{\\rho}$",
+    )
+    axes[2].fill_between(
+        churn_df["time_bin"],
+        churn_df["rhomin"],
+        churn_df["rhomax"],
+        alpha=0.20,
+    )
+    axes[2].set_ylabel("Mean $\\hat{\\rho}$")
+    axes[2].set_title("Churn Perception Over Time")
+    axes[2].grid(True, linestyle=":")
+    axes[2].legend()
+
+    axes[3].stackplot(
         mode_df["time_bin"],
         mode_df["gossip_frac"],
         mode_df["cluster_frac"],
         labels=["gossip", "cluster"],
         alpha=0.85,
     )
-    axes[2].set_xlabel("Simulation Time")
-    axes[2].set_ylabel("Mode Fraction")
-    axes[2].set_title("Dissemination Mode Usage Over Time")
-    axes[2].set_ylim(0.0, 1.0)
-    axes[2].grid(True, linestyle=":")
-    axes[2].legend(loc="upper right")
+    axes[3].set_xlabel("Simulation Time")
+    axes[3].set_ylabel("Mode Fraction")
+    axes[3].set_title("Dissemination Mode Usage Over Time")
+    axes[3].set_ylim(0.0, 1.0)
+    axes[3].grid(True, linestyle=":")
+    axes[3].legend(loc="upper right")
 
     plt.tight_layout()
     experiment = df["experiment"].iloc[0]
@@ -576,6 +570,86 @@ def plot_adaptive_behavior(df: pd.DataFrame, ts: str) -> None:
     plt.close()
 
     print(f"Saved {out}")
+
+
+# -----------------------------
+# Exp11
+# -----------------------------
+def plot_exp11(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
+    ensure_dir("outputs/plots")
+
+    grouped = (
+        df.groupby(["strategy", "churn_rate"])
+        .agg(
+            delay_mean=("propagation_delay", "mean"),
+            delivery_mean=("delivery_ratio", "mean"),
+            dup_mean=("duplicates", "mean"),
+            adapt_mean=("adaptation_rate", "mean"),
+        )
+        .reset_index()
+    )
+
+    strategies = [s for s in ["gossip", "cluster", "ahbn"] if s in grouped["strategy"].unique()]
+
+    if use_offset:
+        offsets = {"gossip": -0.006, "cluster": 0.0, "ahbn": 0.006}
+    else:
+        offsets = {s: 0.0 for s in strategies}
+
+    x_ticks = sorted(df["churn_rate"].dropna().unique())
+
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.5))
+
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].sort_values("churn_rate")
+        x = apply_offset(part["churn_rate"], offsets.get(s, 0.0))
+        axes[0, 0].plot(x, part["delay_mean"], marker="o", label=s)
+    axes[0, 0].set_title("Delay vs Churn Rate")
+    axes[0, 0].set_ylabel("Propagation Delay")
+    axes[0, 0].set_xticks(x_ticks)
+    axes[0, 0].grid(True, linestyle=":")
+    axes[0, 0].legend()
+
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].sort_values("churn_rate")
+        x = apply_offset(part["churn_rate"], offsets.get(s, 0.0))
+        axes[0, 1].plot(x, part["delivery_mean"], marker="o", label=s)
+    axes[0, 1].set_title("Delivery Ratio vs Churn Rate")
+    axes[0, 1].set_ylabel("Delivery Ratio")
+    axes[0, 1].set_xticks(x_ticks)
+    axes[0, 1].grid(True, linestyle=":")
+    axes[0, 1].legend()
+
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].sort_values("churn_rate")
+        x = apply_offset(part["churn_rate"], offsets.get(s, 0.0))
+        axes[1, 0].plot(x, part["dup_mean"], marker="o", label=s)
+    axes[1, 0].set_title("Duplicates vs Churn Rate")
+    axes[1, 0].set_ylabel("Duplicates")
+    axes[1, 0].set_xticks(x_ticks)
+    axes[1, 0].grid(True, linestyle=":")
+    axes[1, 0].legend()
+
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].sort_values("churn_rate")
+        x = apply_offset(part["churn_rate"], offsets.get(s, 0.0))
+        axes[1, 1].plot(x, part["adapt_mean"], marker="o", label=s)
+    axes[1, 1].set_title("Adaptation Rate vs Churn Rate")
+    axes[1, 1].set_ylabel("Adaptation Rate")
+    axes[1, 1].set_xticks(x_ticks)
+    axes[1, 1].grid(True, linestyle=":")
+    axes[1, 1].legend()
+
+    for ax in axes[1, :]:
+        ax.set_xlabel("Churn Rate")
+
+    plt.tight_layout()
+    out = get_plot_output_path("exp11", ts)
+    plt.savefig(out, bbox_inches="tight")
+    plt.close()
+
+    print(f"Saved {out}")
+
 
 # -----------------------------
 # Main
@@ -603,12 +677,13 @@ def main(path: str, use_offset: bool) -> None:
     elif experiment == "exp09":
         plot_exp09(df, ts, use_offset)
     elif experiment == "exp10":
-        plot_exp10(df, ts, use_offset=args.offset)
+        plot_exp10(df, ts, use_offset=use_offset)
+    elif experiment == "exp11":
+        plot_exp11(df, ts, use_offset=use_offset)
     else:
         raise ValueError(f"Unknown experiment: {experiment}")
 
     print(f"Plots saved (offset={use_offset}) with timestamp: {ts}")
-
 
 
 if __name__ == "__main__":

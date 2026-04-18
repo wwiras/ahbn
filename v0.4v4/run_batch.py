@@ -4,6 +4,7 @@ import argparse
 
 from ahbn.config import load_yaml_config
 from ahbn.control import AHBNController, AHBNParams
+from ahbn.churn_manager import ChurnManager
 from ahbn.failure_injector import FailureInjector
 from ahbn.simulator import Simulator
 from ahbn.strategies.ahbn import AHBNStrategy
@@ -85,6 +86,7 @@ def run_single(
     ba_m: int | None = None,
     failure_mode: str | None = None,
     enable_adaptive_trace: bool = False,
+    churn_rate: float | None = None,
 ) -> dict:
     graph = get_or_build_topology(
         topology_type=topology_type,
@@ -124,7 +126,13 @@ def run_single(
         local_failure["mode"] = failure_mode
         local_cfg["failure"] = local_failure
 
+    if churn_rate is not None:
+        local_churn = dict(cfg.get("churn", {}))
+        local_churn["target_fraction"] = churn_rate
+        local_cfg["churn"] = local_churn
+
     failure_injector = FailureInjector(local_cfg, seed=seed)
+    churn_manager = ChurnManager(local_cfg, seed=seed)
 
     sim = Simulator(
         nodes=nodes,
@@ -136,6 +144,7 @@ def run_single(
         controller=controller,
         ch_overload_factor=ch_overload_factor if ch_overload_factor is not None else 1.0,
         failure_injector=failure_injector,
+        churn_manager=churn_manager,
         experiment_name=cfg.get("experiment", "unknown"),
         strategy_name=strategy_name,
         scenario_tag=failure_mode if failure_mode is not None else topology_type,
@@ -331,73 +340,6 @@ def exp09(cfg: dict) -> list[ResultRow]:
     return rows
 
 
-
-    rows: list[dict] = []
-
-    base_seed = cfg["seed"]
-    runs_per_setting = cfg["runs_per_setting"]
-    num_nodes = cfg["num_nodes"]
-    topology_type = cfg["topology_type"]
-    use_topology_cache = cfg.get("use_topology_cache", True)
-
-    base_delay = cfg.get("base_delay", 1.0)
-    jitter = cfg.get("jitter", 0.2)
-    source_id = cfg.get("message_source", 0)
-    fanout = cfg.get("fanout", 3)
-    num_clusters = cfg.get("num_clusters", 4)
-
-    edge_prob = cfg.get("edge_prob")
-    ba_m = cfg.get("ba_m")
-
-    strategies = cfg.get("strategies", ["gossip", "cluster", "ahbn"])
-    failure_modes = cfg.get("failure_modes", ["node_failure", "ch_failure", "overload"])
-
-    for failure_mode in failure_modes:
-        for run_idx in range(runs_per_setting):
-            seed = base_seed + run_idx
-
-            for strategy_name in strategies:
-                summary = run_single(
-                    cfg=cfg,
-                    strategy_name=strategy_name,
-                    seed=seed,
-                    topology_type=topology_type,
-                    num_nodes=num_nodes,
-                    use_topology_cache=use_topology_cache,
-                    base_delay=base_delay,
-                    jitter=jitter,
-                    message_source=source_id,
-                    fanout=fanout,
-                    num_clusters=num_clusters,
-                    edge_prob=edge_prob,
-                    ba_m=ba_m,
-                    failure_mode=failure_mode,
-                )
-
-                rows.append(
-                    {
-                        "experiment": "exp10",
-                        "strategy": strategy_name,
-                        "seed": seed,
-                        "num_nodes": num_nodes,
-                        "topology_type": topology_type,
-                        "topology_param": edge_prob if topology_type == "er" else ba_m,
-                        "fanout": fanout if strategy_name != "cluster" else None,
-                        "num_clusters": num_clusters,
-                        "ch_overload_factor": None,
-                        "failure_mode": summary["failure_mode"],
-                        "failed_node_id": summary["failed_node_id"],
-                        "delivery_ratio": summary["delivery_ratio"],
-                        "propagation_delay": summary["propagation_delay"],
-                        "duplicates": summary["duplicates"],
-                        "total_forwards": summary["total_forwards"],
-                        "recovery_time": summary["recovery_time"],
-                    }
-                )
-
-    return rows
-
-
 def exp10(cfg: dict) -> tuple[list[dict], list]:
     rows: list[dict] = []
     trace_rows: list = []
@@ -470,6 +412,83 @@ def exp10(cfg: dict) -> tuple[list[dict], list]:
     return rows, trace_rows
 
 
+def exp11(cfg: dict) -> tuple[list[dict], list]:
+    rows: list[dict] = []
+    trace_rows: list = []
+
+    base_seed = cfg["seed"]
+    runs_per_setting = cfg["runs_per_setting"]
+    num_nodes = cfg["num_nodes"]
+    topology_type = cfg["topology_type"]
+    use_topology_cache = cfg.get("use_topology_cache", True)
+
+    base_delay = cfg.get("base_delay", 1.0)
+    jitter = cfg.get("jitter", 0.2)
+    source_id = cfg.get("message_source", 0)
+    fanout = cfg.get("fanout", 3)
+    num_clusters = cfg.get("num_clusters", 4)
+
+    edge_prob = cfg.get("edge_prob")
+    ba_m = cfg.get("ba_m")
+
+    strategies = cfg.get("strategies", ["gossip", "cluster", "ahbn"])
+    churn_rates = cfg.get("churn_rates", [0.0, 0.05, 0.10, 0.20, 0.30])
+
+    for churn_rate in churn_rates:
+        for run_idx in range(runs_per_setting):
+            seed = base_seed + run_idx
+
+            for strategy_name in strategies:
+                summary = run_single(
+                    cfg=cfg,
+                    strategy_name=strategy_name,
+                    seed=seed,
+                    topology_type=topology_type,
+                    num_nodes=num_nodes,
+                    use_topology_cache=use_topology_cache,
+                    base_delay=base_delay,
+                    jitter=jitter,
+                    message_source=source_id,
+                    fanout=fanout,
+                    num_clusters=num_clusters,
+                    edge_prob=edge_prob,
+                    ba_m=ba_m,
+                    churn_rate=churn_rate,
+                    enable_adaptive_trace=(strategy_name == "ahbn"),
+                )
+
+                rows.append(
+                    {
+                        "experiment": "exp11",
+                        "strategy": strategy_name,
+                        "seed": seed,
+                        "num_nodes": num_nodes,
+                        "topology_type": topology_type,
+                        "topology_param": edge_prob if topology_type == "er" else ba_m,
+                        "fanout": fanout if strategy_name != "cluster" else None,
+                        "num_clusters": num_clusters,
+                        "churn_rate": churn_rate,
+                        "delivery_ratio": summary["delivery_ratio"],
+                        "propagation_delay": summary["propagation_delay"],
+                        "duplicates": summary["duplicates"],
+                        "total_forwards": summary["total_forwards"],
+                        "churn_event_count": summary["churn_event_count"],
+                        "churn_leave_count": summary["churn_leave_count"],
+                        "churn_join_count": summary["churn_join_count"],
+                        "cluster_repair_count": summary["cluster_repair_count"],
+                        "mode_switch_count": summary["mode_switch_count"],
+                        "fanout_change_count": summary["fanout_change_count"],
+                        "adaptation_event_count": summary["adaptation_event_count"],
+                        "adaptation_rate": summary["adaptation_rate"],
+                    }
+                )
+
+                if "adaptive_trace_rows" in summary:
+                    trace_rows.extend(summary["adaptive_trace_rows"])
+
+    return rows, trace_rows
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -512,6 +531,29 @@ def main() -> None:
             trace_path = save_adaptive_trace_csv(
                 trace_rows,
                 "outputs/csv/exp10_adaptive_trace.csv",
+                add_timestamp=True,
+            )
+            print(f"Saved {trace_path}")
+
+    elif experiment == "exp11":
+        import pandas as pd
+        from pathlib import Path
+
+        rows, trace_rows = exp11(cfg)
+        out = Path("outputs/csv")
+        out.mkdir(parents=True, exist_ok=True)
+
+        from ahbn.utils import current_timestamp
+        ts = current_timestamp()
+
+        path = out / f"exp11_results_{ts}.csv"
+        pd.DataFrame(rows).to_csv(path, index=False)
+        print(f"Saved {path}")
+
+        if trace_rows:
+            trace_path = save_adaptive_trace_csv(
+                trace_rows,
+                "outputs/csv/exp11_adaptive_trace.csv",
                 add_timestamp=True,
             )
             print(f"Saved {trace_path}")

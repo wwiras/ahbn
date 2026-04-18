@@ -45,6 +45,13 @@ class Node:
     is_overloaded: bool = False
     extra_delay: float = 0.0
 
+    # Exp11 additions
+    original_neighbors: List[int] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.original_neighbors:
+            self.original_neighbors = list(self.neighbors)
+
     def has_seen(self, message_id: str) -> bool:
         return message_id in self.seen_messages
 
@@ -54,6 +61,9 @@ class Node:
     # Exp10 additions
     def fail(self) -> None:
         self.is_active = False
+        self.neighbors = []
+        self.gateway_neighbors = []
+        self.is_cluster_head = False
 
     def recover(self) -> None:
         self.is_active = True
@@ -65,3 +75,10 @@ class Node:
     def clear_overload(self) -> None:
         self.is_overloaded = False
         self.extra_delay = 0.0
+
+    # Exp11 additions
+    def leave_network(self) -> None:
+        self.fail()
+
+    def rejoin_network(self) -> None:
+        self.recover()

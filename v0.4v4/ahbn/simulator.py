@@ -10,6 +10,7 @@ from ahbn.message import Message
 from ahbn.metrics import MetricsCollector
 from ahbn.node import Node
 from ahbn.strategies.base import ForwardingStrategy
+from ahbn.topology import repair_topology_after_churn
 from ahbn.utils import AdaptiveTraceRow
 
 
@@ -25,6 +26,7 @@ class Simulator:
         controller: Optional[AHBNController] = None,
         ch_overload_factor: float = 1.0,
         failure_injector=None,
+        churn_manager=None,
         experiment_name: str = "unknown",
         strategy_name: str = "unknown",
         scenario_tag: str = "default",
@@ -48,12 +50,18 @@ class Simulator:
         self.failure_injector = failure_injector
         self.message_source_id: Optional[int] = None
 
+        # Exp11 additions
+        self.churn_manager = churn_manager
+
         # Adaptive trace logging
         self.experiment_name = experiment_name
         self.strategy_name = strategy_name
         self.scenario_tag = scenario_tag
         self.enable_adaptive_trace = enable_adaptive_trace
         self.adaptive_trace_rows: list[AdaptiveTraceRow] = []
+
+        if self.churn_manager is not None:
+            self.churn_manager.schedule_events(self)
 
     def schedule_event(self, time: float, priority: int, event_type: str, payload: dict) -> None:
         heapq.heappush(self.queue, Event(time, priority, event_type, payload))
@@ -93,9 +101,6 @@ class Simulator:
             payload={"dst_id": source_id, "src_id": source_id, "message": msg},
         )
 
-    # ------------------------------------------------------------------
-    # Adaptive trace helper
-    # ------------------------------------------------------------------
     def log_adaptive_trace(
         self,
         node: Node,
@@ -139,7 +144,7 @@ class Simulator:
         )
 
     # ------------------------------------------------------------------
-    # Exp09 helpers: local topology signals
+    # Exp09/Exp11 helpers: local topology and churn signals
     # ------------------------------------------------------------------
     def get_node_degree(self, node: Node) -> int:
         return len(node.neighbors)
@@ -177,7 +182,14 @@ class Simulator:
         norm_degree = min(2.0, degree / max(1.0, degree_ref))
         return b_overlap * overlap + b_degree * norm_degree
 
-    def update_ahbn_state(self, node: Node, now: float, receive_lag: float) -> None:
+    def update_ahbn_state(
+        self,
+        node: Node,
+        now: float,
+        receive_lag: float,
+        churn_proxy: float = 0.0,
+        event_type: str = "control_update",
+    ) -> None:
         if self.controller is None:
             return
 
@@ -188,24 +200,46 @@ class Simulator:
 
         load_proxy = float(node.stats.forwarded)
         latency_proxy = receive_lag
-
         degree_proxy = float(self.get_node_degree(node))
         overlap_proxy = self.get_neighbor_overlap(node)
         redundancy_proxy = self.get_redundancy_proxy(node)
+
+        prev_mode = node.control.mode
+        prev_fanout = node.control.fanout
 
         self.controller.update_metrics(
             node.control,
             duplicate_ratio=duplicate_ratio,
             load_proxy=load_proxy,
             latency_proxy=latency_proxy,
-            churn_proxy=0.0,
+            churn_proxy=churn_proxy,
             degree_proxy=degree_proxy,
             overlap_proxy=overlap_proxy,
             redundancy_proxy=redundancy_proxy,
         )
         self.controller.decide_mode_and_fanout(node.control)
 
-        self.log_adaptive_trace(node, event_type="control_update")
+        mode_switched = node.control.mode != prev_mode
+        fanout_changed = node.control.fanout != prev_fanout
+        self.metrics.record_adaptation(mode_switched, fanout_changed)
+
+        self.log_adaptive_trace(node, event_type=event_type)
+
+    def apply_churn_feedback(self, churn_proxy: float) -> None:
+        if self.controller is None:
+            return
+
+        for node in self.nodes.values():
+            if not node.is_active:
+                continue
+            self.metrics.record_churn_feedback_update()
+            self.update_ahbn_state(
+                node=node,
+                now=self.clock,
+                receive_lag=float(node.control.l_hat),
+                churn_proxy=churn_proxy,
+                event_type="churn_control_update",
+            )
 
     def handle_receive(self, now: float, dst_id: int, src_id: int, message: Message) -> None:
         self.clock = now
@@ -240,6 +274,30 @@ class Simulator:
         self.metrics.record_forward(message.message_id, len(unique_targets))
         self.log_adaptive_trace(node, event_type="forward_decision", message=message)
 
+    def handle_churn_leave(self, now: float, node_id: int, churn_rate: float) -> None:
+        self.clock = now
+        node = self.nodes[node_id]
+        if not node.is_active:
+            return
+
+        node.leave_network()
+        repair_topology_after_churn(self.nodes, self.cluster_manager)
+        self.metrics.record_churn_event("leave")
+        self.metrics.record_cluster_repair()
+        self.apply_churn_feedback(churn_proxy=churn_rate)
+
+    def handle_churn_join(self, now: float, node_id: int, churn_rate: float) -> None:
+        self.clock = now
+        node = self.nodes[node_id]
+        if node.is_active:
+            return
+
+        node.rejoin_network()
+        repair_topology_after_churn(self.nodes, self.cluster_manager)
+        self.metrics.record_churn_event("join")
+        self.metrics.record_cluster_repair()
+        self.apply_churn_feedback(churn_proxy=churn_rate)
+
     def run(self, until: float = 1000.0) -> None:
         while self.queue:
             event = heapq.heappop(self.queue)
@@ -260,4 +318,16 @@ class Simulator:
                     dst_id=event.payload["dst_id"],
                     src_id=event.payload["src_id"],
                     message=event.payload["message"],
+                )
+            elif event.event_type == "churn_leave":
+                self.handle_churn_leave(
+                    now=event.time,
+                    node_id=event.payload["node_id"],
+                    churn_rate=float(event.payload.get("churn_rate", 0.0)),
+                )
+            elif event.event_type == "churn_join":
+                self.handle_churn_join(
+                    now=event.time,
+                    node_id=event.payload["node_id"],
+                    churn_rate=float(event.payload.get("churn_rate", 0.0)),
                 )

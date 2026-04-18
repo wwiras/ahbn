@@ -46,6 +46,10 @@ class AdaptiveTraceRow:
     deg_hat: float
     ov_hat: float
     r_hat: float
+    c_hat: float
+    resource_class: str
+    capacity_score: float
+    processing_delay: float
     received_new: int
     received_duplicate: int
     forwarded: int
@@ -100,12 +104,6 @@ def save_adaptive_trace_csv(
 
 
 def extract_timestamp_from_filename(path: str | Path) -> str | None:
-    """
-    Example:
-        outputs/csv/exp07_results_20260402_093015.csv
-    returns:
-        20260402_093015
-    """
     name = Path(path).name
     m = re.search(r"(\d{8}_\d{6})", name)
     return m.group(1) if m else None

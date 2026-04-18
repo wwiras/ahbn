@@ -40,13 +40,16 @@ class Node:
     stats: NodeStats = field(default_factory=NodeStats)
     control: NodeControlState = field(default_factory=NodeControlState)
 
-    # Exp10 additions
     is_active: bool = True
     is_overloaded: bool = False
     extra_delay: float = 0.0
 
-    # Exp11 additions
     original_neighbors: List[int] = field(default_factory=list)
+
+    # Exp12 resource-awareness
+    resource_class: str = "medium"
+    capacity_score: float = 1.0
+    processing_delay: float = 0.0
 
     def __post_init__(self) -> None:
         if not self.original_neighbors:
@@ -58,7 +61,6 @@ class Node:
     def mark_seen(self, message_id: str) -> None:
         self.seen_messages.add(message_id)
 
-    # Exp10 additions
     def fail(self) -> None:
         self.is_active = False
         self.neighbors = []
@@ -76,7 +78,6 @@ class Node:
         self.is_overloaded = False
         self.extra_delay = 0.0
 
-    # Exp11 additions
     def leave_network(self) -> None:
         self.fail()
 

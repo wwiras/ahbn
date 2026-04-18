@@ -129,7 +129,69 @@ def build_nodes_from_graph(graph: nx.Graph) -> Dict[int, Node]:
     return nodes
 
 
-def assign_static_clusters(nodes: Dict[int, Node], num_clusters: int) -> ClusterManager:
+def assign_mixed_resources(nodes: Dict[int, Node], cfg: dict, seed: int, scenario_name: str | None = None) -> None:
+    resources_cfg = cfg.get("resources", {})
+    classes_cfg = resources_cfg.get("classes", {})
+    profiles_cfg = resources_cfg.get("profiles", {})
+
+    if not classes_cfg:
+        return
+
+    if scenario_name is None:
+        fractions = resources_cfg.get("fractions", {"strong": 0.2, "medium": 0.5, "weak": 0.3})
+    else:
+        fractions = profiles_cfg.get(scenario_name)
+        if fractions is None:
+            raise ValueError(f"Unknown resource scenario: {scenario_name}")
+
+    node_ids = sorted(nodes.keys())
+    rng = random.Random(seed)
+    rng.shuffle(node_ids)
+
+    total = len(node_ids)
+    remaining_ids = node_ids[:]
+    allocated: dict[str, list[int]] = {}
+    classes = list(fractions.keys())
+
+    for idx, cls_name in enumerate(classes):
+        if idx == len(classes) - 1:
+            selected = remaining_ids[:]
+        else:
+            count = int(round(float(fractions.get(cls_name, 0.0)) * total))
+            count = max(0, min(count, len(remaining_ids)))
+            selected = remaining_ids[:count]
+            remaining_ids = remaining_ids[count:]
+        allocated[cls_name] = selected
+
+    for cls_name, ids in allocated.items():
+        cls_cfg = classes_cfg.get(cls_name, {})
+        processing_delay = float(cls_cfg.get("processing_delay", 0.0))
+        capacity_score = float(cls_cfg.get("capacity_score", 1.0))
+        for node_id in ids:
+            node = nodes[node_id]
+            node.resource_class = cls_name
+            node.processing_delay = processing_delay
+            node.capacity_score = capacity_score
+
+
+def _select_cluster_head(member_ids: list[int], nodes: Dict[int, Node], resource_aware_heads: bool) -> int:
+    if not resource_aware_heads:
+        return min(member_ids)
+    return max(
+        member_ids,
+        key=lambda nid: (
+            nodes[nid].capacity_score,
+            len(nodes[nid].neighbors),
+            -nid,
+        ),
+    )
+
+
+def assign_static_clusters(
+    nodes: Dict[int, Node],
+    num_clusters: int,
+    resource_aware_heads: bool = False,
+) -> ClusterManager:
     if num_clusters <= 0:
         raise ValueError("num_clusters must be > 0")
 
@@ -142,7 +204,7 @@ def assign_static_clusters(nodes: Dict[int, Node], num_clusters: int) -> Cluster
         cluster_mgr.cluster_to_members.setdefault(cluster_id, []).append(node_id)
 
     for cluster_id, members in cluster_mgr.cluster_to_members.items():
-        head_id = min(members)
+        head_id = _select_cluster_head(members, nodes, resource_aware_heads)
         cluster_mgr.cluster_to_head[cluster_id] = head_id
         nodes[head_id].is_cluster_head = True
 
@@ -156,9 +218,6 @@ def assign_static_clusters(nodes: Dict[int, Node], num_clusters: int) -> Cluster
     return cluster_mgr
 
 
-# ------------------------------------------------------------------
-# Exp11 helpers: churn repair / dynamic topology refresh
-# ------------------------------------------------------------------
 def refresh_active_neighbors(nodes: Dict[int, Node]) -> None:
     for node in nodes.values():
         if not node.is_active:
@@ -171,7 +230,11 @@ def refresh_active_neighbors(nodes: Dict[int, Node]) -> None:
         ]
 
 
-def refresh_cluster_overlay(nodes: Dict[int, Node], cluster_mgr: ClusterManager | None) -> None:
+def refresh_cluster_overlay(
+    nodes: Dict[int, Node],
+    cluster_mgr: ClusterManager | None,
+    resource_aware_heads: bool = False,
+) -> None:
     if cluster_mgr is None:
         return
 
@@ -192,7 +255,7 @@ def refresh_cluster_overlay(nodes: Dict[int, Node], cluster_mgr: ClusterManager 
         cluster_mgr.cluster_to_members[cluster_id] = members
         if not members:
             continue
-        head_id = min(members)
+        head_id = _select_cluster_head(members, nodes, resource_aware_heads)
         cluster_mgr.cluster_to_head[cluster_id] = head_id
         nodes[head_id].is_cluster_head = True
 
@@ -204,6 +267,10 @@ def refresh_cluster_overlay(nodes: Dict[int, Node], cluster_mgr: ClusterManager 
         nodes[right].gateway_neighbors.append(left)
 
 
-def repair_topology_after_churn(nodes: Dict[int, Node], cluster_mgr: ClusterManager | None) -> None:
+def repair_topology_after_churn(
+    nodes: Dict[int, Node],
+    cluster_mgr: ClusterManager | None,
+    resource_aware_heads: bool = False,
+) -> None:
     refresh_active_neighbors(nodes)
-    refresh_cluster_overlay(nodes, cluster_mgr)
+    refresh_cluster_overlay(nodes, cluster_mgr, resource_aware_heads=resource_aware_heads)

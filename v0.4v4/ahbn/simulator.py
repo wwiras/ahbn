@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import heapq
+import math
 import random
 from typing import Dict, Optional
 
@@ -31,6 +32,7 @@ class Simulator:
         strategy_name: str = "unknown",
         scenario_tag: str = "default",
         enable_adaptive_trace: bool = False,
+        resource_aware_heads: bool = False,
     ) -> None:
         self.nodes = nodes
         self.strategy = strategy
@@ -45,15 +47,11 @@ class Simulator:
         self.cluster_manager = cluster_manager
         self.controller = controller
         self.ch_overload_factor = ch_overload_factor
-
-        # Exp10 additions
         self.failure_injector = failure_injector
         self.message_source_id: Optional[int] = None
-
-        # Exp11 additions
         self.churn_manager = churn_manager
+        self.resource_aware_heads = resource_aware_heads
 
-        # Adaptive trace logging
         self.experiment_name = experiment_name
         self.strategy_name = strategy_name
         self.scenario_tag = scenario_tag
@@ -81,6 +79,10 @@ class Simulator:
         if dst.is_overloaded:
             extra += dst.extra_delay
 
+        # Exp12 resource-aware latency
+        extra += 0.5 * max(0.0, src.processing_delay)
+        extra += 0.5 * max(0.0, dst.processing_delay)
+
         delay = self.base_delay + self.rng.uniform(0.0, self.jitter) + extra
         self.schedule_event(
             time=now + delay,
@@ -91,7 +93,6 @@ class Simulator:
 
     def inject_message(self, source_id: int, message_id: str) -> None:
         self.message_source_id = source_id
-
         msg = Message(message_id=message_id, source_id=source_id, created_at=self.clock)
         self.metrics.register_message(message_id, source_id, self.clock)
         self.schedule_event(
@@ -101,20 +102,11 @@ class Simulator:
             payload={"dst_id": source_id, "src_id": source_id, "message": msg},
         )
 
-    def log_adaptive_trace(
-        self,
-        node: Node,
-        event_type: str,
-        message: Optional[Message] = None,
-    ) -> None:
-        if not self.enable_adaptive_trace:
-            return
-
-        if self.controller is None:
+    def log_adaptive_trace(self, node: Node, event_type: str, message: Optional[Message] = None) -> None:
+        if not self.enable_adaptive_trace or self.controller is None:
             return
 
         snap = self.controller.snapshot_state(node.control)
-
         self.adaptive_trace_rows.append(
             AdaptiveTraceRow(
                 experiment=self.experiment_name,
@@ -137,15 +129,16 @@ class Simulator:
                 deg_hat=snap["deg_hat"],
                 ov_hat=snap["ov_hat"],
                 r_hat=snap["r_hat"],
+                c_hat=snap.get("c_hat", 0.0),
+                resource_class=node.resource_class,
+                capacity_score=node.capacity_score,
+                processing_delay=node.processing_delay,
                 received_new=node.stats.received_new,
                 received_duplicate=node.stats.received_duplicate,
                 forwarded=node.stats.forwarded,
             )
         )
 
-    # ------------------------------------------------------------------
-    # Exp09/Exp11 helpers: local topology and churn signals
-    # ------------------------------------------------------------------
     def get_node_degree(self, node: Node) -> int:
         return len(node.neighbors)
 
@@ -171,16 +164,18 @@ class Simulator:
     def get_redundancy_proxy(self, node: Node) -> float:
         if self.controller is None:
             return 0.0
-
         degree = self.get_node_degree(node)
         overlap = self.get_neighbor_overlap(node)
-
         degree_ref = getattr(self.controller, "degree_ref", 10.0)
         b_degree = getattr(self.controller, "b_degree", 0.25)
         b_overlap = getattr(self.controller, "b_overlap", 0.75)
-
         norm_degree = min(2.0, degree / max(1.0, degree_ref))
         return b_overlap * overlap + b_degree * norm_degree
+
+    def get_capacity_proxy(self, node: Node) -> float:
+        capacity_term = max(0.0, (1.0 / max(0.25, node.capacity_score)) - 1.0)
+        delay_term = max(0.0, node.processing_delay / max(0.1, self.base_delay))
+        return 0.6 * capacity_term + 0.4 * delay_term
 
     def update_ahbn_state(
         self,
@@ -194,15 +189,13 @@ class Simulator:
             return
 
         total_recv = node.stats.received_new + node.stats.received_duplicate
-        duplicate_ratio = (
-            node.stats.received_duplicate / total_recv if total_recv > 0 else 0.0
-        )
-
-        load_proxy = float(node.stats.forwarded)
+        duplicate_ratio = node.stats.received_duplicate / total_recv if total_recv > 0 else 0.0
+        load_proxy = float(node.stats.forwarded) / max(0.25, node.capacity_score)
         latency_proxy = receive_lag
         degree_proxy = float(self.get_node_degree(node))
         overlap_proxy = self.get_neighbor_overlap(node)
         redundancy_proxy = self.get_redundancy_proxy(node)
+        capacity_proxy = self.get_capacity_proxy(node)
 
         prev_mode = node.control.mode
         prev_fanout = node.control.fanout
@@ -216,13 +209,13 @@ class Simulator:
             degree_proxy=degree_proxy,
             overlap_proxy=overlap_proxy,
             redundancy_proxy=redundancy_proxy,
+            capacity_proxy=capacity_proxy,
         )
         self.controller.decide_mode_and_fanout(node.control)
 
         mode_switched = node.control.mode != prev_mode
         fanout_changed = node.control.fanout != prev_fanout
         self.metrics.record_adaptation(mode_switched, fanout_changed)
-
         self.log_adaptive_trace(node, event_type=event_type)
 
     def apply_churn_feedback(self, churn_proxy: float) -> None:
@@ -244,7 +237,6 @@ class Simulator:
     def handle_receive(self, now: float, dst_id: int, src_id: int, message: Message) -> None:
         self.clock = now
         node = self.nodes[dst_id]
-
         if not node.is_active:
             return
 
@@ -281,7 +273,11 @@ class Simulator:
             return
 
         node.leave_network()
-        repair_topology_after_churn(self.nodes, self.cluster_manager)
+        repair_topology_after_churn(
+            self.nodes,
+            self.cluster_manager,
+            resource_aware_heads=self.resource_aware_heads,
+        )
         self.metrics.record_churn_event("leave")
         self.metrics.record_cluster_repair()
         self.apply_churn_feedback(churn_proxy=churn_rate)
@@ -293,10 +289,44 @@ class Simulator:
             return
 
         node.rejoin_network()
-        repair_topology_after_churn(self.nodes, self.cluster_manager)
+        repair_topology_after_churn(
+            self.nodes,
+            self.cluster_manager,
+            resource_aware_heads=self.resource_aware_heads,
+        )
         self.metrics.record_churn_event("join")
         self.metrics.record_cluster_repair()
         self.apply_churn_feedback(churn_proxy=churn_rate)
+
+    def get_resource_metrics(self) -> dict:
+        active_nodes = [n for n in self.nodes.values() if n.is_active]
+        if not active_nodes:
+            return {
+                "max_normalized_load": 0.0,
+                "load_balance_cv": 0.0,
+                "strong_forward_share": 0.0,
+                "medium_forward_share": 0.0,
+                "weak_forward_share": 0.0,
+            }
+
+        norm_loads = [n.stats.forwarded / max(0.25, n.capacity_score) for n in active_nodes]
+        mean_load = sum(norm_loads) / len(norm_loads)
+        variance = sum((x - mean_load) ** 2 for x in norm_loads) / len(norm_loads)
+        std_load = math.sqrt(variance)
+        total_forwarded = sum(n.stats.forwarded for n in active_nodes)
+
+        class_totals = {"strong": 0, "medium": 0, "weak": 0}
+        for node in active_nodes:
+            class_totals[node.resource_class] = class_totals.get(node.resource_class, 0) + node.stats.forwarded
+
+        denom = total_forwarded if total_forwarded > 0 else 1
+        return {
+            "max_normalized_load": max(norm_loads) if norm_loads else 0.0,
+            "load_balance_cv": std_load / mean_load if mean_load > 0 else 0.0,
+            "strong_forward_share": class_totals.get("strong", 0) / denom,
+            "medium_forward_share": class_totals.get("medium", 0) / denom,
+            "weak_forward_share": class_totals.get("weak", 0) / denom,
+        }
 
     def run(self, until: float = 1000.0) -> None:
         while self.queue:

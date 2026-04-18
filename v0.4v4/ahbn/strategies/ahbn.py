@@ -45,6 +45,7 @@ class AHBNStrategy(ForwardingStrategy):
         preserve_cluster_path_under_tau: bool = False,
         cluster_reserve_in_gossip_mode: int = 0,
         gossip_reserve_in_cluster_mode: int = 0,
+        resource_aware_targeting: bool = False,
     ) -> None:
         self.default_fanout = default_fanout
         self.adaptive_fanout = adaptive_fanout
@@ -58,6 +59,7 @@ class AHBNStrategy(ForwardingStrategy):
         self.preserve_cluster_path_under_tau = preserve_cluster_path_under_tau
         self.cluster_reserve_in_gossip_mode = cluster_reserve_in_gossip_mode
         self.gossip_reserve_in_cluster_mode = gossip_reserve_in_cluster_mode
+        self.resource_aware_targeting = resource_aware_targeting
 
         self._gossip = GossipStrategy(fanout=default_fanout)
         self._cluster = ClusterStrategy()
@@ -134,6 +136,18 @@ class AHBNStrategy(ForwardingStrategy):
 
         return n_cluster, n_gossip
 
+    def _sort_targets_by_capacity(self, targets: List[int], simulator) -> List[int]:
+        if not self.resource_aware_targeting:
+            return targets
+        return sorted(
+            targets,
+            key=lambda nid: (
+                -float(getattr(simulator.nodes[nid], "capacity_score", 1.0)),
+                float(getattr(simulator.nodes[nid], "processing_delay", 0.0)),
+                nid,
+            ),
+        )
+
     def _take_unique(self, pool: List[int], selected: List[int], limit: int) -> None:
         for t in pool:
             if t not in selected:
@@ -157,13 +171,19 @@ class AHBNStrategy(ForwardingStrategy):
         gossip_weight = max(0.0, min(1.0, gossip_weight))
         mode = getattr(node.control, "mode", "gossip")
 
-        gossip_targets = self._dedup_preserve_order(
-            self._gossip.select_targets(node, message, simulator),
-            node.node_id,
+        gossip_targets = self._sort_targets_by_capacity(
+            self._dedup_preserve_order(
+                self._gossip.select_targets(node, message, simulator),
+                node.node_id,
+            ),
+            simulator,
         )
-        cluster_targets = self._dedup_preserve_order(
-            self._cluster.select_targets(node, message, simulator),
-            node.node_id,
+        cluster_targets = self._sort_targets_by_capacity(
+            self._dedup_preserve_order(
+                self._cluster.select_targets(node, message, simulator),
+                node.node_id,
+            ),
+            simulator,
         )
 
         # ------------------------------------------------------------
@@ -173,7 +193,15 @@ class AHBNStrategy(ForwardingStrategy):
         # ------------------------------------------------------------
         tau_ok = True
         if self.use_tau_gate:
-            tau_ok = self._passes_tau_gate(node, message)
+            tau = float(getattr(node.control, "tau", 1.0))
+
+            # PATCH: duplicate-aware suppression for strong nodes
+            if getattr(node, "capacity_score", 0.0) >= 0.8:
+                tau *= (1.0 - 0.5 * float(getattr(node.control, "d_hat", 0.0)))
+                tau = max(0.05, min(1.0, tau))
+
+            score = deterministic_hash01(str(node.node_id), message.message_id)
+            tau_ok = score < tau
 
         if not tau_ok:
             if (
@@ -186,6 +214,23 @@ class AHBNStrategy(ForwardingStrategy):
                 keep = max(1, self.min_cluster_targets)
                 return cluster_targets[:keep]
             return []
+        
+        # tau_ok = True
+        # if self.use_tau_gate:
+        #     tau_ok = self._passes_tau_gate(node, message)
+
+        # if not tau_ok:
+        #     if (
+        #         self.mode_sensitive_mix
+        #         and self.preserve_cluster_path_under_tau
+        #         and mode == "cluster"
+        #         and cluster_targets
+        #     ):
+        #         # preserve minimal structured progress
+        #         keep = max(1, self.min_cluster_targets)
+        #         return cluster_targets[:keep]
+        #     return []
+        
 
         # ------------------------------------------------------------
         # Count allocation

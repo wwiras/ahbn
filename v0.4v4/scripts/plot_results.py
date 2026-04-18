@@ -652,6 +652,160 @@ def plot_exp11(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
 
 # -----------------------------
+# Exp12
+# -----------------------------
+def plot_exp12(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
+    ensure_dir("outputs/plots")
+
+    grouped = (
+        df.groupby(["strategy", "resource_scenario"])
+        .agg(
+            delay_mean=("propagation_delay", "mean"),
+            delivery_mean=("delivery_ratio", "mean"),
+            dup_mean=("duplicates", "mean"),
+            load_cv_mean=("load_balance_cv", "mean"),
+        )
+        .reset_index()
+    )
+
+    strategies = [s for s in ["gossip", "cluster", "ahbn"] if s in grouped["strategy"].unique()]
+    scenarios = list(df["resource_scenario"].dropna().unique())
+
+    if use_offset:
+        offsets = {"gossip": -0.08, "cluster": 0.0, "ahbn": 0.08}
+    else:
+        offsets = {s: 0.0 for s in strategies}
+
+    x_pos = list(range(len(scenarios)))
+    x_map = {sc: idx for idx, sc in enumerate(scenarios)}
+
+    fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.5))
+
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].copy()
+        part["x"] = part["resource_scenario"].map(x_map).astype(float) + offsets.get(s, 0.0)
+        part = part.sort_values("x")
+        axes[0, 0].plot(part["x"], part["delay_mean"], marker="o", label=s)
+    axes[0, 0].set_title("Delay vs Resource Scenario")
+    axes[0, 0].set_ylabel("Propagation Delay")
+    axes[0, 0].set_xticks(x_pos)
+    axes[0, 0].set_xticklabels(scenarios)
+    axes[0, 0].grid(True, linestyle=":")
+    axes[0, 0].legend()
+
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].copy()
+        part["x"] = part["resource_scenario"].map(x_map).astype(float) + offsets.get(s, 0.0)
+        part = part.sort_values("x")
+        axes[0, 1].plot(part["x"], part["delivery_mean"], marker="o", label=s)
+    axes[0, 1].set_title("Delivery Ratio vs Resource Scenario")
+    axes[0, 1].set_ylabel("Delivery Ratio")
+    axes[0, 1].set_xticks(x_pos)
+    axes[0, 1].set_xticklabels(scenarios)
+    axes[0, 1].grid(True, linestyle=":")
+    axes[0, 1].legend()
+
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].copy()
+        part["x"] = part["resource_scenario"].map(x_map).astype(float) + offsets.get(s, 0.0)
+        part = part.sort_values("x")
+        axes[1, 0].plot(part["x"], part["dup_mean"], marker="o", label=s)
+    axes[1, 0].set_title("Duplicates vs Resource Scenario")
+    axes[1, 0].set_ylabel("Duplicates")
+    axes[1, 0].set_xticks(x_pos)
+    axes[1, 0].set_xticklabels(scenarios)
+    axes[1, 0].grid(True, linestyle=":")
+    axes[1, 0].legend()
+
+    for s in strategies:
+        part = grouped[grouped["strategy"] == s].copy()
+        part["x"] = part["resource_scenario"].map(x_map).astype(float) + offsets.get(s, 0.0)
+        part = part.sort_values("x")
+        axes[1, 1].plot(part["x"], part["load_cv_mean"], marker="o", label=s)
+    axes[1, 1].set_title("Load Balance CV vs Resource Scenario")
+    axes[1, 1].set_ylabel("Load Balance CV")
+    axes[1, 1].set_xticks(x_pos)
+    axes[1, 1].set_xticklabels(scenarios)
+    axes[1, 1].grid(True, linestyle=":")
+    axes[1, 1].legend()
+
+    plt.tight_layout()
+    out = get_plot_output_path("exp12", ts)
+    plt.savefig(out, bbox_inches="tight")
+    plt.close()
+    print(f"Saved {out}")
+
+
+def plot_adaptive_behavior_exp12(df: pd.DataFrame, ts: str) -> None:
+    ensure_dir("outputs/plots")
+
+    df = df[df["strategy"] == "ahbn"].copy()
+    if df.empty:
+        raise ValueError("Adaptive trace CSV contains no AHBN rows.")
+
+    df = df[df["event_type"].isin(["control_update", "forward_decision"])].copy()
+    if df.empty:
+        raise ValueError("No adaptive control events found after filtering.")
+
+    df = df.sort_values(["time", "node_id"])
+    df = make_time_bins(df, bin_width=0.25)
+    df_last = df.groupby(["time_bin", "node_id"], as_index=False).last()
+
+    fig, axes = plt.subplots(4, 1, figsize=(10.5, 11.5), sharex=True)
+
+    for cls_name in ["strong", "medium", "weak"]:
+        part = (
+            df_last[df_last["resource_class"] == cls_name]
+            .groupby("time_bin", as_index=False)
+            .agg(mean_fanout=("fanout", "mean"), mean_weight=("weight", "mean"), mean_chat=("c_hat", "mean"))
+        )
+        if part.empty:
+            continue
+        axes[0].plot(part["time_bin"], part["mean_fanout"], marker="o", label=cls_name)
+        axes[1].plot(part["time_bin"], part["mean_weight"], marker="o", label=cls_name)
+        axes[2].plot(part["time_bin"], part["mean_chat"], marker="o", label=cls_name)
+
+    load_df = df_last.copy()
+    load_df["norm_forwarded"] = load_df["forwarded"] / load_df["capacity_score"].clip(lower=0.25)
+    for cls_name in ["strong", "medium", "weak"]:
+        part = (
+            load_df[load_df["resource_class"] == cls_name]
+            .groupby("time_bin", as_index=False)
+            .agg(mean_norm_forwarded=("norm_forwarded", "mean"))
+        )
+        if part.empty:
+            continue
+        axes[3].plot(part["time_bin"], part["mean_norm_forwarded"], marker="o", label=cls_name)
+
+    axes[0].set_ylabel("Mean Fanout")
+    axes[0].set_title("Class-wise Fanout Over Time")
+    axes[0].grid(True, linestyle=":")
+    axes[0].legend()
+
+    axes[1].set_ylabel("Mean Weight")
+    axes[1].set_title("Class-wise Gossip Preference Over Time")
+    axes[1].grid(True, linestyle=":")
+    axes[1].legend()
+
+    # axes[2].set_ylabel("Mean $\hat{c}$")
+    axes[2].set_ylabel("Mean $\\hat{c}$")
+    axes[2].set_title("Capacity Stress Perception Over Time")
+    axes[2].grid(True, linestyle=":")
+    axes[2].legend()
+
+    axes[3].set_xlabel("Simulation Time")
+    axes[3].set_ylabel("Norm. Forwarded")
+    axes[3].set_title("Normalized Forwarding Load Over Time")
+    axes[3].grid(True, linestyle=":")
+    axes[3].legend()
+
+    plt.tight_layout()
+    out = get_adaptive_plot_output_path("exp12", ts)
+    plt.savefig(out, bbox_inches="tight")
+    plt.close()
+    print(f"Saved {out}")
+
+# -----------------------------
 # Main
 # -----------------------------
 def main(path: str, use_offset: bool) -> None:
@@ -663,7 +817,11 @@ def main(path: str, use_offset: bool) -> None:
 
     adaptive_trace_cols = {"time", "node_id", "fanout", "mode", "d_hat"}
     if adaptive_trace_cols.issubset(df.columns):
-        plot_adaptive_behavior(df, ts)
+        experiment = df["experiment"].iloc[0]
+        if experiment == "exp12" and "resource_class" in df.columns and "c_hat" in df.columns:
+            plot_adaptive_behavior_exp12(df, ts)
+        else:
+            plot_adaptive_behavior(df, ts)
         print(f"Adaptive plots saved with timestamp: {ts}")
         return
 
@@ -680,6 +838,8 @@ def main(path: str, use_offset: bool) -> None:
         plot_exp10(df, ts, use_offset=use_offset)
     elif experiment == "exp11":
         plot_exp11(df, ts, use_offset=use_offset)
+    elif experiment == "exp12":
+        plot_exp12(df, ts, use_offset=use_offset)
     else:
         raise ValueError(f"Unknown experiment: {experiment}")
 

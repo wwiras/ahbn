@@ -6,75 +6,54 @@ from dataclasses import dataclass
 
 @dataclass
 class NodeControlState:
-    # Existing EWMA metrics
-    d_hat: float = 0.0    # duplicate EWMA
-    u_hat: float = 0.0    # load EWMA proxy
-    l_hat: float = 0.0    # latency EWMA
-    rho_hat: float = 0.0  # churn EWMA (future extension)
-
-    # New Exp09-compatible EWMA metrics
-    deg_hat: float = 0.0  # degree EWMA
-    ov_hat: float = 0.0   # neighbor-overlap EWMA
-    r_hat: float = 0.0    # redundancy EWMA
-
-    # Control outputs
-    mode: str = "gossip"  # "gossip" or "cluster"
-    weight: float = 1.0   # gossip preference in [0,1]
+    d_hat: float = 0.0
+    u_hat: float = 0.0
+    l_hat: float = 0.0
+    rho_hat: float = 0.0
+    deg_hat: float = 0.0
+    ov_hat: float = 0.0
+    r_hat: float = 0.0
+    c_hat: float = 0.0
+    mode: str = "gossip"
+    weight: float = 1.0
     fanout: int = 3
-    tau: float = 1.0      # forwarding gate threshold in [0,1]
+    tau: float = 1.0
 
 
 @dataclass
 class AHBNParams:
-    # EWMA smoothing
     ewma_alpha: float = 0.3
-
-    # Reference points
     d0: float = 0.2
     u0: float = 5.0
     l0: float = 2.0
     rho0: float = 0.1
-
-    # New topology-aware reference points
     deg0: float = 8.0
     ov0: float = 0.25
     r0: float = 0.35
-
-    # Weight equation coefficients
-    # Positive => more gossip preference
-    # Negative => less gossip preference
+    c0: float = 0.0
     a_dup: float = -2.0
     a_load: float = -1.5
     a_lat: float = 1.5
     a_churn: float = 1.0
-
-    # New Exp09 coefficients
     a_deg: float = -0.4
     a_ov: float = -1.2
     a_red: float = -1.8
-
-    # Redundancy composition
+    a_cap: float = 0.0
     b_degree: float = 0.25
     b_overlap: float = 0.75
-
-    # Fanout bounds
     min_fanout: int = 1
     max_fanout: int = 6
     mode_threshold: float = 0.5
-
-    # Fanout adaptation coefficients
     fanout_dup_penalty: float = 2.0
     fanout_load_penalty: float = 0.5
     fanout_lat_reward: float = 0.8
     fanout_red_penalty: float = 1.5
-
-    # Forwarding gate parameters
+    fanout_cap_penalty: float = 0.0
     tau_max: float = 0.90
     tau_min: float = 0.25
     tau_dup_penalty: float = 1.0
     tau_red_penalty: float = 1.5
-
-    # Keep AHBN hybrid, not pure gossip / pure cluster
+    tau_cap_penalty: float = 0.0
     min_weight: float = 0.20
     max_weight: float = 0.80
 
@@ -82,8 +61,6 @@ class AHBNParams:
 class AHBNController:
     def __init__(self, params: AHBNParams) -> None:
         self.params = params
-
-        # Expose these for simulator convenience if needed
         self.degree_ref = params.deg0
         self.b_degree = params.b_degree
         self.b_overlap = params.b_overlap
@@ -93,7 +70,6 @@ class AHBNController:
         return a * new + (1.0 - a) * old
 
     def sigmoid(self, x: float) -> float:
-        # numerically stable enough for our range
         return 1.0 / (1.0 + math.exp(-x))
 
     def clamp(self, x: float, lo: float, hi: float) -> float:
@@ -109,28 +85,15 @@ class AHBNController:
         degree_proxy: float = 0.0,
         overlap_proxy: float = 0.0,
         redundancy_proxy: float = 0.0,
+        capacity_proxy: float = 0.0,
     ) -> None:
-        """
-        Backward-compatible metric update.
-
-        Exp07 / Exp08:
-            can continue calling with only duplicate_ratio, load_proxy,
-            latency_proxy, churn_proxy.
-
-        Exp09:
-            can additionally provide degree_proxy, overlap_proxy,
-            redundancy_proxy.
-        """
         state.d_hat = self.ewma(state.d_hat, duplicate_ratio)
         state.u_hat = self.ewma(state.u_hat, load_proxy)
         state.l_hat = self.ewma(state.l_hat, latency_proxy)
         state.rho_hat = self.ewma(state.rho_hat, churn_proxy)
-
         state.deg_hat = self.ewma(state.deg_hat, degree_proxy)
         state.ov_hat = self.ewma(state.ov_hat, overlap_proxy)
 
-        # If caller did not explicitly provide redundancy_proxy,
-        # derive it from degree + overlap to preserve compatibility.
         if redundancy_proxy <= 0.0:
             redundancy_proxy = (
                 self.params.b_overlap * overlap_proxy
@@ -138,14 +101,9 @@ class AHBNController:
             )
 
         state.r_hat = self.ewma(state.r_hat, redundancy_proxy)
+        state.c_hat = self.ewma(getattr(state, "c_hat", 0.0), capacity_proxy)
 
     def compute_weight(self, state: NodeControlState) -> float:
-        """
-        Compute gossip preference weight in [0,1].
-
-        High weight  -> more gossip-like behavior
-        Low weight   -> more cluster-like behavior
-        """
         p = self.params
         x = (
             p.a_churn * (state.rho_hat - p.rho0)
@@ -155,42 +113,35 @@ class AHBNController:
             + p.a_deg * (state.deg_hat - p.deg0)
             + p.a_ov * (state.ov_hat - p.ov0)
             + p.a_red * (state.r_hat - p.r0)
+            + p.a_cap * (state.c_hat - p.c0)
         )
         w = self.sigmoid(x)
         return self.clamp(w, p.min_weight, p.max_weight)
 
     def compute_tau(self, state: NodeControlState) -> float:
-        """
-        Forwarding gate threshold.
-        Lower tau => fewer rebroadcasts.
-        """
         p = self.params
         tau = p.tau_max * math.exp(
             -p.tau_dup_penalty * max(0.0, state.d_hat)
             -p.tau_red_penalty * max(0.0, state.r_hat)
+            -p.tau_cap_penalty * max(0.0, state.c_hat - p.c0)
         )
         return self.clamp(tau, p.tau_min, p.tau_max)
 
     def decide_mode_and_fanout(self, state: NodeControlState) -> None:
         p = self.params
-
         state.weight = self.compute_weight(state)
-
-        if state.weight >= p.mode_threshold:
-            state.mode = "gossip"
-        else:
-            state.mode = "cluster"
-
+        state.mode = "gossip" if state.weight >= p.mode_threshold else "cluster"
         raw = round(
             p.max_fanout
             - p.fanout_dup_penalty * state.d_hat
             - p.fanout_load_penalty * state.u_hat
             + p.fanout_lat_reward * state.l_hat
             - p.fanout_red_penalty * max(0.0, state.r_hat - p.r0)
+            - p.fanout_cap_penalty * max(0.0, state.c_hat - p.c0)
         )
         state.fanout = max(p.min_fanout, min(p.max_fanout, raw))
         state.tau = self.compute_tau(state)
-        
+
     def snapshot_state(self, state: NodeControlState) -> dict:
         return {
             "mode": state.mode,
@@ -204,4 +155,5 @@ class AHBNController:
             "deg_hat": state.deg_hat,
             "ov_hat": state.ov_hat,
             "r_hat": state.r_hat,
+            "c_hat": getattr(state, "c_hat", 0.0),
         }

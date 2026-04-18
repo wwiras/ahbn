@@ -4,6 +4,8 @@ import argparse
 
 from ahbn.config import load_yaml_config
 from ahbn.control import AHBNController, AHBNParams
+from ahbn.control_exp11 import AHBNController as AHBNControllerExp11
+from ahbn.control_exp11 import AHBNParams as AHBNParamsExp11
 from ahbn.churn_manager import ChurnManager
 from ahbn.failure_injector import FailureInjector
 from ahbn.simulator import Simulator
@@ -56,9 +58,54 @@ def build_ahbn_params(cfg: dict) -> AHBNParams:
     )
 
 
+def build_ahbn_params_exp11(cfg: dict) -> AHBNParamsExp11:
+    ahbn_cfg = cfg.get("ahbn", {})
+
+    return AHBNParamsExp11(
+        ewma_alpha=ahbn_cfg.get("ewma_alpha", 0.3),
+        d0=ahbn_cfg.get("d0", 0.2),
+        u0=ahbn_cfg.get("u0", 5.0),
+        l0=ahbn_cfg.get("l0", 2.0),
+        rho0=ahbn_cfg.get("rho0", 0.1),
+        deg0=ahbn_cfg.get("deg0", 8.0),
+        ov0=ahbn_cfg.get("ov0", 0.25),
+        r0=ahbn_cfg.get("r0", 0.35),
+        a_dup=ahbn_cfg.get("a_dup", -2.0),
+        a_load=ahbn_cfg.get("a_load", -1.5),
+        a_lat=ahbn_cfg.get("a_lat", 1.5),
+        a_churn=ahbn_cfg.get("a_churn", 1.0),
+        a_deg=ahbn_cfg.get("a_deg", -0.4),
+        a_ov=ahbn_cfg.get("a_ov", -1.2),
+        a_red=ahbn_cfg.get("a_red", -1.8),
+        b_degree=ahbn_cfg.get("b_degree", 0.25),
+        b_overlap=ahbn_cfg.get("b_overlap", 0.75),
+        min_fanout=ahbn_cfg.get("min_fanout", 1),
+        max_fanout=ahbn_cfg.get("max_fanout", 6),
+        mode_threshold=ahbn_cfg.get("mode_threshold", 0.5),
+        fanout_dup_penalty=ahbn_cfg.get("fanout_dup_penalty", 2.0),
+        fanout_load_penalty=ahbn_cfg.get("fanout_load_penalty", 0.5),
+        fanout_lat_reward=ahbn_cfg.get("fanout_lat_reward", 0.8),
+        fanout_red_penalty=ahbn_cfg.get("fanout_red_penalty", 1.5),
+        tau_max=ahbn_cfg.get("tau_max", 0.90),
+        tau_min=ahbn_cfg.get("tau_min", 0.25),
+        tau_dup_penalty=ahbn_cfg.get("tau_dup_penalty", 1.0),
+        tau_red_penalty=ahbn_cfg.get("tau_red_penalty", 1.5),
+        min_weight=ahbn_cfg.get("min_weight", 0.20),
+        max_weight=ahbn_cfg.get("max_weight", 0.80),
+        weight_center_pull=ahbn_cfg.get("weight_center_pull", 0.70),
+        churn_weight_cap=ahbn_cfg.get("churn_weight_cap", 0.08),
+        mode_hysteresis=ahbn_cfg.get("mode_hysteresis", 0.06),
+        tau_churn_boost=ahbn_cfg.get("tau_churn_boost", 0.60),
+        fanout_churn_boost=ahbn_cfg.get("fanout_churn_boost", 1.0),
+    )
+
+
 def build_ahbn_strategy(cfg: dict, fanout: int | None = None) -> AHBNStrategy:
     ahbn_cfg = cfg.get("ahbn", {})
     default_fanout = fanout if fanout is not None else ahbn_cfg.get("default_fanout", 3)
+
+    experiment_name = cfg.get("experiment", "")
+    is_exp11 = experiment_name == "exp11"
 
     return AHBNStrategy(
         default_fanout=default_fanout,
@@ -66,7 +113,32 @@ def build_ahbn_strategy(cfg: dict, fanout: int | None = None) -> AHBNStrategy:
         hybrid_mode=ahbn_cfg.get("hybrid_mode", True),
         use_tau_gate=ahbn_cfg.get("use_tau_gate", True),
         min_cluster_targets=ahbn_cfg.get("min_cluster_targets", 1),
+
+        # Exp11-only strategy shaping
+        mode_sensitive_mix=ahbn_cfg.get("mode_sensitive_mix", is_exp11),
+        cluster_mode_bias=ahbn_cfg.get("cluster_mode_bias", 0.75 if is_exp11 else 0.50),
+        gossip_mode_bias=ahbn_cfg.get("gossip_mode_bias", 0.75 if is_exp11 else 0.50),
+        preserve_cluster_path_under_tau=ahbn_cfg.get(
+            "preserve_cluster_path_under_tau",
+            is_exp11,
+        ),
+        cluster_reserve_in_gossip_mode=ahbn_cfg.get(
+            "cluster_reserve_in_gossip_mode",
+            1 if is_exp11 else 0,
+        ),
+        gossip_reserve_in_cluster_mode=ahbn_cfg.get(
+            "gossip_reserve_in_cluster_mode",
+            1 if is_exp11 else 0,
+        ),
     )
+
+
+def select_ahbn_controller(cfg: dict):
+    experiment_name = cfg.get("experiment", "")
+
+    if experiment_name == "exp11":
+        return AHBNControllerExp11(build_ahbn_params_exp11(cfg))
+    return AHBNController(build_ahbn_params(cfg))
 
 
 def run_single(
@@ -110,7 +182,7 @@ def run_single(
 
     elif strategy_name == "ahbn":
         cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters or 4)
-        controller = AHBNController(build_ahbn_params(cfg))
+        controller = select_ahbn_controller(cfg)
         strategy = build_ahbn_strategy(cfg, fanout=fanout)
 
     elif strategy_name == "hybrid_fixed":
@@ -515,14 +587,13 @@ def main() -> None:
     elif experiment == "exp10":
         import pandas as pd
         from pathlib import Path
+        from ahbn.utils import current_timestamp
 
         rows, trace_rows = exp10(cfg)
         out = Path("outputs/csv")
         out.mkdir(parents=True, exist_ok=True)
 
-        from ahbn.utils import current_timestamp
         ts = current_timestamp()
-
         path = out / f"exp10_results_{ts}.csv"
         pd.DataFrame(rows).to_csv(path, index=False)
         print(f"Saved {path}")
@@ -538,14 +609,13 @@ def main() -> None:
     elif experiment == "exp11":
         import pandas as pd
         from pathlib import Path
+        from ahbn.utils import current_timestamp
 
         rows, trace_rows = exp11(cfg)
         out = Path("outputs/csv")
         out.mkdir(parents=True, exist_ok=True)
 
-        from ahbn.utils import current_timestamp
         ts = current_timestamp()
-
         path = out / f"exp11_results_{ts}.csv"
         pd.DataFrame(rows).to_csv(path, index=False)
         print(f"Saved {path}")

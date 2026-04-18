@@ -563,6 +563,23 @@ def plot_adaptive_behavior(df: pd.DataFrame, ts: str) -> None:
     axes[3].grid(True, linestyle=":")
     axes[3].legend(loc="upper right")
 
+    # --- ADD THIS BLOCK ---
+    FAILURE_TIME = 1.0  # match your config trigger_time
+
+    for ax in axes:
+        ax.axvline(
+            x=FAILURE_TIME,
+            linestyle="--",
+            color="red",
+            alpha=0.7,
+            linewidth=1.5,
+            label="failure event"
+        )
+
+    # Optional: show legend only once (top plot)
+    axes[0].legend(loc="upper right")
+    # --- END PATCH ---
+
     plt.tight_layout()
     experiment = df["experiment"].iloc[0]
     out = get_adaptive_plot_output_path(experiment, ts)

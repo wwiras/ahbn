@@ -338,8 +338,10 @@ class Simulator:
         c_t: local/network instability pressure.
 
         Exp11 already expresses churn_rate as a proportion, so it maps
-        directly to [0, 1]. Non-churn updates use 0 and therefore allow
-        the EWMA churn state to decay after the disturbance passes.
+        directly to [0, 1].
+
+        Ordinary packet receptions do not manufacture a zero-valued churn
+        observation. If no new churn observation exists, c_hat is retained.
         """
         return self.clamp01(churn_proxy)
 
@@ -352,10 +354,10 @@ class Simulator:
         node: Node,
         event_type: str,
         message: Optional[Message] = None,
-        duplicate_obs: float = 0.0,
-        latency_obs: float = 0.0,
-        utilization_obs: float = 0.0,
-        churn_obs: float = 0.0,
+        duplicate_obs: Optional[float] = None,
+        latency_obs: Optional[float] = None,
+        utilization_obs: Optional[float] = None,
+        churn_obs: Optional[float] = None,
         mode_switched: bool = False,
         fanout_changed: bool = False,
     ) -> None:
@@ -465,21 +467,13 @@ class Simulator:
     # Canonical AHBN state update
     # ================================================================
 
-    # def update_ahbn_state(
-    #     self,
-    #     node: Node,
-    #     now: float,
-    #     local_delay: float,
-    #     churn_proxy: float = 0.0,
-    #     event_type: str = "control_update",
-    # ) -> None:
     
     def update_ahbn_state(
         self,
         node: Node,
         now: float,
         local_delay: float,
-        churn_proxy: float = 0.0,
+        churn_proxy: Optional[float] = None,
         event_type: str = "control_update",
         message: Optional[Message] = None,
     ) -> None:
@@ -493,7 +487,11 @@ class Simulator:
         duplicate_obs = self.get_duplicate_observation(node)
         latency_obs = self.get_latency_observation(local_delay)
         utilization_obs = self.get_utilization_observation(node)
-        churn_obs = self.get_churn_observation(churn_proxy)
+        churn_obs = (
+            self.get_churn_observation(churn_proxy)
+            if churn_proxy is not None
+            else None
+        )
 
         # Preserve previous outputs for adaptation-event metrics.
         prev_mode = node.control.mode
@@ -530,20 +528,7 @@ class Simulator:
             fanout_changed,
         )
 
-        # self.log_adaptive_trace(
-        #     node,
-        #     event_type=event_type,
-        # )
         
-        # self.log_adaptive_trace(
-        #     node,
-        #     event_type=event_type,
-        #     message=message,
-        #     duplicate_obs=duplicate_obs,
-        #     latency_obs=latency_obs,
-        #     utilization_obs=utilization_obs,
-        #     churn_obs=churn_obs,
-        # )
         
         # --------------------------------------------------------
         # Record exactly one trace row for this controller update
@@ -594,9 +579,9 @@ class Simulator:
             prev_mode = node.control.mode
             prev_fanout = node.control.fanout
 
-            node.control.c_hat = self.controller.ewma(
-                node.control.c_hat,
-                churn_obs,
+            self.controller.update_metrics(
+                node.control,
+                churn_obs=churn_obs,
             )
 
             self.controller.decide_mode_and_fanout(
@@ -616,9 +601,19 @@ class Simulator:
                 fanout_changed,
             )
 
+            
             self.log_adaptive_trace(
                 node,
                 event_type="churn_control_update",
+                # duplicate_obs=node.control.d_hat,
+                # latency_obs=node.control.l_hat,
+                # utilization_obs=node.control.u_hat,
+                duplicate_obs=None,
+                latency_obs=None,
+                utilization_obs=None,
+                churn_obs=churn_obs,
+                mode_switched=mode_switched,
+                fanout_changed=fanout_changed,
             )
 
     # ================================================================
@@ -658,15 +653,13 @@ class Simulator:
                 message.message_id
             )
 
+
+            
             self.update_ahbn_state(
                 node=node,
                 now=now,
                 local_delay=local_delay,
-            )
-
-            self.log_adaptive_trace(
-                node,
-                event_type="duplicate_drop",
+                event_type="duplicate_receive",
                 message=message,
             )
 
@@ -693,14 +686,12 @@ class Simulator:
             now,
         )
 
+
+        
         self.update_ahbn_state(
             node=node,
             now=now,
             local_delay=local_delay,
-        )
-
-        self.log_adaptive_trace(
-            node,
             event_type="new_receive",
             message=message,
         )
@@ -735,11 +726,6 @@ class Simulator:
             len(unique_targets),
         )
 
-        self.log_adaptive_trace(
-            node,
-            event_type="forward_decision",
-            message=message,
-        )
 
     # ================================================================
     # Churn event handlers
@@ -897,7 +883,7 @@ class Simulator:
     # Main event loop
     # ================================================================
 
-    def run(self,until: float = 1000.0,) -> None:
+    def run(self, until: float = 1000.0) -> None:
         while self.queue:
             event = heapq.heappop(self.queue)
 

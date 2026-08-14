@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional
 
 import math
 from dataclasses import dataclass
@@ -138,45 +139,36 @@ class AHBNController:
     def update_metrics(
         self,
         state: NodeControlState,
-        duplicate_obs: float,
-        latency_obs: float,
-        utilization_obs: float,
-        churn_obs: float,
+        duplicate_obs: Optional[float] = None,
+        latency_obs: Optional[float] = None,
+        utilization_obs: Optional[float] = None,
+        churn_obs: Optional[float] = None,
     ) -> None:
-        """
-        Update the four canonical AHBN observations.
 
-        All input observations MUST already represent normalized
-        pressure values in [0, 1]:
+        if duplicate_obs is not None:
+            state.d_hat = self.ewma(
+                state.d_hat,
+                duplicate_obs,
+            )
 
-            duplicate_obs
-            latency_obs
-            utilization_obs
-            churn_obs
+        if latency_obs is not None:
+            state.l_hat = self.ewma(
+                state.l_hat,
+                latency_obs,
+            )
 
-        Environment-specific measurement/normalization belongs
-        outside this controller.
-        """
+        if utilization_obs is not None:
+            state.u_hat = self.ewma(
+                state.u_hat,
+                utilization_obs,
+            )
 
-        state.d_hat = self.ewma(
-            state.d_hat,
-            duplicate_obs,
-        )
+        if churn_obs is not None:
+            state.c_hat = self.ewma(
+                state.c_hat,
+                churn_obs,
+            )
 
-        state.l_hat = self.ewma(
-            state.l_hat,
-            latency_obs,
-        )
-
-        state.u_hat = self.ewma(
-            state.u_hat,
-            utilization_obs,
-        )
-
-        state.c_hat = self.ewma(
-            state.c_hat,
-            churn_obs,
-        )
 
     # --------------------------------------------------------
     # Canonical AHBN score

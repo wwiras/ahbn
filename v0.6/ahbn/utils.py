@@ -75,10 +75,15 @@ class AdaptiveTraceRow:
     # --------------------------------------------------------
     # Raw normalized observations [0, 1]
     # --------------------------------------------------------
-    duplicate_obs: float
-    latency_obs: float
-    utilization_obs: float
-    churn_obs: float
+    # duplicate_obs: float
+    # latency_obs: float
+    # utilization_obs: float
+    # churn_obs: float
+    
+    duplicate_obs: Optional[float]
+    latency_obs: Optional[float]
+    utilization_obs: Optional[float]
+    churn_obs: Optional[float]
 
     # --------------------------------------------------------
     # EWMA-smoothed observations [0, 1]

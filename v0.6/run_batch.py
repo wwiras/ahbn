@@ -74,6 +74,7 @@ def run_single(
     enable_adaptive_trace: bool = False,
     churn_rate: float | None = None,
     resource_scenario: str | None = None,
+    scenario_tag: str | None = None,
 ) -> dict:
     graph = get_or_build_topology(
         topology_type=topology_type,
@@ -147,9 +148,13 @@ def run_single(
         experiment_name=cfg.get("experiment", "unknown"),
         strategy_name=strategy_name,
         scenario_tag=(
-            resource_scenario
-            if resource_scenario is not None
-            else (failure_mode if failure_mode is not None else topology_type)
+            scenario_tag
+            if scenario_tag is not None
+            else (
+                resource_scenario
+                if resource_scenario is not None
+                else (failure_mode if failure_mode is not None else topology_type)
+            )
         ),
         enable_adaptive_trace=enable_adaptive_trace,
         resource_aware_heads=False,
@@ -165,8 +170,9 @@ def run_single(
     return summary
 
 
-def exp07(cfg: dict) -> list[ResultRow]:
+def exp07(cfg: dict) -> tuple[list[ResultRow], list]:
     rows: list[ResultRow] = []
+    trace_rows: list = []
 
     base_seed = cfg["seed"]
     runs_per_setting = cfg["runs_per_setting"]
@@ -204,6 +210,8 @@ def exp07(cfg: dict) -> list[ResultRow]:
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
                     ba_m=ba_m,
+                    enable_adaptive_trace=(strategy_name == "ahbn"),
+                    scenario_tag=f"fanout={fanout}",
                 )
                 rows.append(
                     ResultRow(
@@ -222,11 +230,16 @@ def exp07(cfg: dict) -> list[ResultRow]:
                         total_forwards=summary["total_forwards"],
                     )
                 )
-    return rows
+
+                if "adaptive_trace_rows" in summary:
+                    trace_rows.extend(summary["adaptive_trace_rows"])
+
+    return rows, trace_rows
 
 
-def exp08(cfg: dict) -> list[ResultRow]:
+def exp08(cfg: dict) -> tuple[list[ResultRow], list]:
     rows: list[ResultRow] = []
+    trace_rows: list = []
 
     base_seed = cfg["seed"]
     runs_per_setting = cfg["runs_per_setting"]
@@ -264,6 +277,8 @@ def exp08(cfg: dict) -> list[ResultRow]:
                     ch_overload_factor=overload,
                     edge_prob=edge_prob,
                     ba_m=ba_m,
+                    enable_adaptive_trace=(strategy_name == "ahbn"),
+                    scenario_tag=f"ch_overload_factor={overload}",
                 )
                 rows.append(
                     ResultRow(
@@ -282,11 +297,16 @@ def exp08(cfg: dict) -> list[ResultRow]:
                         total_forwards=summary["total_forwards"],
                     )
                 )
-    return rows
+
+                if "adaptive_trace_rows" in summary:
+                    trace_rows.extend(summary["adaptive_trace_rows"])
+
+    return rows, trace_rows
 
 
-def exp09(cfg: dict) -> list[ResultRow]:
+def exp09(cfg: dict) -> tuple[list[ResultRow], list]:
     rows: list[ResultRow] = []
+    trace_rows: list = []
 
     base_seed = cfg["seed"]
     runs_per_setting = cfg["runs_per_setting"]
@@ -324,6 +344,8 @@ def exp09(cfg: dict) -> list[ResultRow]:
                     fanout=fanout,
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
+                    enable_adaptive_trace=(strategy_name == "ahbn"),
+                    scenario_tag=f"edge_prob={edge_prob}",
                 )
                 rows.append(
                     ResultRow(
@@ -342,7 +364,11 @@ def exp09(cfg: dict) -> list[ResultRow]:
                         total_forwards=summary["total_forwards"],
                     )
                 )
-    return rows
+
+                if "adaptive_trace_rows" in summary:
+                    trace_rows.extend(summary["adaptive_trace_rows"])
+
+    return rows, trace_rows
 
 
 def exp10(cfg: dict) -> tuple[list[dict], list]:
@@ -577,19 +603,43 @@ def main() -> None:
     experiment = cfg["experiment"]
 
     if experiment == "exp07":
-        rows = exp07(cfg)
+        rows, trace_rows = exp07(cfg)
         path = save_results_csv(rows, "outputs/csv/exp07_results.csv")
         print(f"Saved {path}")
 
+        if trace_rows:
+            trace_path = save_adaptive_trace_csv(
+                trace_rows,
+                "outputs/csv/exp07_adaptive_trace.csv",
+                add_timestamp=True,
+            )
+            print(f"Saved {trace_path}")
+
     elif experiment == "exp08":
-        rows = exp08(cfg)
+        rows, trace_rows = exp08(cfg)
         path = save_results_csv(rows, "outputs/csv/exp08_results.csv")
         print(f"Saved {path}")
 
+        if trace_rows:
+            trace_path = save_adaptive_trace_csv(
+                trace_rows,
+                "outputs/csv/exp08_adaptive_trace.csv",
+                add_timestamp=True,
+            )
+            print(f"Saved {trace_path}")
+
     elif experiment == "exp09":
-        rows = exp09(cfg)
+        rows, trace_rows = exp09(cfg)
         path = save_results_csv(rows, "outputs/csv/exp09_results.csv")
         print(f"Saved {path}")
+
+        if trace_rows:
+            trace_path = save_adaptive_trace_csv(
+                trace_rows,
+                "outputs/csv/exp09_adaptive_trace.csv",
+                add_timestamp=True,
+            )
+            print(f"Saved {trace_path}")
 
     elif experiment == "exp10":
         import pandas as pd

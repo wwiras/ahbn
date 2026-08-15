@@ -1,0 +1,40 @@
+experiment: exp10
+seed: 42
+runs_per_setting: 1
+num_nodes: 20
+topology_type: er
+edge_prob: 0.08
+use_topology_cache: false
+base_delay: 1.0
+jitter: 0.2
+message_source: 0
+fanout: 3
+num_clusters: 4
+strategies:
+- ahbn
+failure_modes:
+- overload
+failure:
+  enabled: true
+  mode: node_failure
+  trigger_time: 1.0
+  target_selection: random
+  target_count: 1
+  overload_delay_multiplier: 3.0
+  overload_duration: 0.0
+ahbn:
+  alpha: 0.3
+  d0: 0.5
+  l0: 0.5
+  u0: 0.5
+  c0: 0.5
+  w_d: -1.0
+  w_l: 1.0
+  w_u: -1.0
+  w_c: 1.0
+  kappa: 1.0
+  beta: 1.0
+  min_fanout: 2
+  max_fanout: 4
+  mode_threshold: 0.5
+  default_fanout: 3

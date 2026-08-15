@@ -1,15 +1,3 @@
-# experiment: exp08
-# num_nodes: 100
-# edge_prob: 0.06
-# num_clusters: 4
-# seed: 42
-# message_source: 0
-# runs_per_setting: 20
-# base_delay: 1.0
-# jitter: 0.2
-# ch_overload_factor: [1.0, 1.5, 2.0, 3.0]
-
-
 experiment: exp08
 topology_type: ba
 num_nodes: 100
@@ -17,8 +5,34 @@ ba_m: 3
 num_clusters: 4
 seed: 42
 message_source: 0
+
 runs_per_setting: 20
+
 base_delay: 1.0
 jitter: 0.2
+
 ch_overload_factor: [1.0, 1.5, 2.0, 3.0]
+
 use_topology_cache: true
+
+ahbn:
+  alpha: 0.3
+
+  d0: 0.5
+  l0: 0.5
+  u0: 0.5
+  c0: 0.5
+
+  w_d: -1.0
+  w_l: 1.0
+  w_u: -1.0
+  w_c: 1.0
+
+  kappa: 1.0
+  beta: 1.0
+
+  min_fanout: 2
+  max_fanout: 4
+
+  mode_threshold: 0.5
+  default_fanout: 3

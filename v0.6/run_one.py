@@ -7,8 +7,14 @@ from ahbn.control import AHBNController, AHBNParams
 from ahbn.simulator import Simulator
 from ahbn.strategies.ahbn import AHBNStrategy
 from ahbn.strategies.cluster import ClusterStrategy
+from ahbn.strategies.dcsoc import DCSOCStrategy
 from ahbn.strategies.gossip import GossipStrategy
-from ahbn.topology import assign_static_clusters, build_nodes_from_graph, get_or_build_topology
+from ahbn.topology import (
+    assign_dcsoc_clusters,
+    assign_static_clusters,
+    build_nodes_from_graph,
+    get_or_build_topology,
+)
 
 
 def build_ahbn_params(cfg: dict) -> AHBNParams:
@@ -80,14 +86,77 @@ def build_simulation_from_config(cfg: dict, strategy_name: str):
         cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters)
         strategy = ClusterStrategy()
 
+    # elif strategy_name == "ahbn":
+    #     num_clusters = cfg.get("num_clusters", 4)
+    #     cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters)
+    #     controller = AHBNController(build_ahbn_params(cfg))
+    #     strategy = build_ahbn_strategy(cfg, fanout_override=cfg.get("fanout"))
+
+    # else:
+    #     raise ValueError(f"Unknown strategy: {strategy_name}")
+    
     elif strategy_name == "ahbn":
         num_clusters = cfg.get("num_clusters", 4)
-        cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters)
-        controller = AHBNController(build_ahbn_params(cfg))
-        strategy = build_ahbn_strategy(cfg, fanout_override=cfg.get("fanout"))
+
+        cluster_manager = assign_static_clusters(
+            nodes,
+            num_clusters=num_clusters,
+        )
+
+        controller = AHBNController(
+            build_ahbn_params(cfg)
+        )
+
+        strategy = build_ahbn_strategy(
+            cfg,
+            fanout_override=cfg.get("fanout"),
+        )
+
+    elif strategy_name == "dcsoc":
+
+        dcsoc_cfg = cfg.get(
+            "dcsoc",
+            {},
+        )
+
+        cluster_manager = assign_dcsoc_clusters(
+            nodes,
+            eps=float(
+                dcsoc_cfg.get(
+                    "eps",
+                    2.0,
+                )
+            ),
+            min_samples=int(
+                dcsoc_cfg.get(
+                    "min_samples",
+                    3,
+                )
+            ),
+        )
+
+        strategy = DCSOCStrategy(
+            fanout=int(
+                dcsoc_cfg.get(
+                    "fanout",
+                    cfg.get(
+                        "fanout",
+                        3,
+                    ),
+                )
+            ),
+            inter_fanout=int(
+                dcsoc_cfg.get(
+                    "inter_fanout",
+                    1,
+                )
+            ),
+        )
 
     else:
-        raise ValueError(f"Unknown strategy: {strategy_name}")
+        raise ValueError(
+            f"Unknown strategy: {strategy_name}"
+        )
 
     sim = Simulator(
         nodes=nodes,
@@ -105,7 +174,17 @@ def build_simulation_from_config(cfg: dict, strategy_name: str):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
-    parser.add_argument("--strategy", required=True, choices=["gossip", "cluster", "ahbn"])
+    # parser.add_argument("--strategy", required=True, choices=["gossip", "cluster", "ahbn"])
+    parser.add_argument(
+        "--strategy",
+        required=True,
+        choices=[
+            "gossip",
+            "cluster",
+            "dcsoc",
+            "ahbn",
+        ],
+    )
     args = parser.parse_args()
 
     cfg = load_yaml_config(args.config)

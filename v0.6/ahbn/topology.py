@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Dict
 
 import networkx as nx
+import numpy as np
+from sklearn.cluster import DBSCAN
 
 from ahbn.cluster import ClusterManager
 from ahbn.node import Node
@@ -274,3 +276,234 @@ def repair_topology_after_churn(
 ) -> None:
     refresh_active_neighbors(nodes)
     refresh_cluster_overlay(nodes, cluster_mgr, resource_aware_heads=resource_aware_heads)
+    
+def assign_dcsoc_clusters(
+        nodes: Dict[int, Node],
+        eps: float,
+        min_samples: int,
+        ) -> ClusterManager:
+    """
+    Build the DC-SoC-inspired density-clustered dissemination overlay.
+
+    DBSCAN is applied to the all-pairs shortest-path hop-distance
+    matrix of the original physical overlay.
+
+    This construction is separate from the canonical AHBN controller.
+    """
+
+    if eps <= 0:
+        raise ValueError("DC-SoC eps must be > 0")
+
+    if min_samples <= 0:
+        raise ValueError("DC-SoC min_samples must be > 0")
+
+    if not nodes:
+        return ClusterManager()
+
+    node_ids = sorted(nodes.keys())
+
+    # Reset existing cluster-overlay state.
+    for node in nodes.values():
+        node.cluster_id = None
+        node.is_cluster_head = False
+        node.gateway_neighbors = []
+
+    # ------------------------------------------------------------
+    # Reconstruct the original physical graph.
+    # ------------------------------------------------------------
+
+    graph = nx.Graph()
+    graph.add_nodes_from(node_ids)
+
+    for node_id in node_ids:
+        for nbr_id in nodes[node_id].original_neighbors:
+            if nbr_id in nodes:
+                graph.add_edge(node_id, nbr_id)
+
+    # ------------------------------------------------------------
+    # Build all-pairs shortest-path distance matrix.
+    # ------------------------------------------------------------
+
+    index_of = {
+        node_id: idx
+        for idx, node_id in enumerate(node_ids)
+    }
+
+    n = len(node_ids)
+
+    unreachable = float(n + 1)
+
+    distance_matrix = np.full(
+        (n, n),
+        unreachable,
+        dtype=float,
+    )
+
+    np.fill_diagonal(
+        distance_matrix,
+        0.0,
+    )
+
+    for source_id, distances in nx.all_pairs_shortest_path_length(graph):
+
+        i = index_of[source_id]
+
+        for target_id, distance in distances.items():
+
+            j = index_of[target_id]
+
+            distance_matrix[i, j] = float(distance)
+
+    # ------------------------------------------------------------
+    # DBSCAN clustering.
+    # ------------------------------------------------------------
+
+    labels = DBSCAN(
+        eps=float(eps),
+        min_samples=int(min_samples),
+        metric="precomputed",
+    ).fit_predict(distance_matrix)
+
+    raw_assignments = {
+        node_id: int(label)
+        for node_id, label in zip(node_ids, labels)
+    }
+
+    established_labels = sorted(
+        {
+            label
+            for label in raw_assignments.values()
+            if label >= 0
+        }
+    )
+
+    # ------------------------------------------------------------
+    # If DBSCAN finds no cluster, use one cluster containing all
+    # nodes so the baseline remains executable.
+    # ------------------------------------------------------------
+
+    if not established_labels:
+
+        assignments = {
+            node_id: 0
+            for node_id in node_ids
+        }
+
+    else:
+
+        label_members = {
+            label: []
+            for label in established_labels
+        }
+
+        for node_id, label in raw_assignments.items():
+
+            if label >= 0:
+                label_members[label].append(node_id)
+
+        assignments = dict(raw_assignments)
+
+        # --------------------------------------------------------
+        # Attach DBSCAN noise nodes (-1) to their nearest cluster.
+        # --------------------------------------------------------
+
+        for node_id, label in raw_assignments.items():
+
+            if label >= 0:
+                continue
+
+            i = index_of[node_id]
+
+            best_label = min(
+                established_labels,
+                key=lambda candidate_label: (
+                    min(
+                        distance_matrix[
+                            i,
+                            index_of[member_id],
+                        ]
+                        for member_id in label_members[candidate_label]
+                    ),
+                    candidate_label,
+                ),
+            )
+
+            assignments[node_id] = best_label
+            label_members[best_label].append(node_id)
+
+        # Normalize cluster IDs to 0, 1, 2, ...
+        remap = {
+            old_label: new_label
+            for new_label, old_label in enumerate(
+                sorted(set(assignments.values()))
+            )
+        }
+
+        assignments = {
+            node_id: remap[label]
+            for node_id, label in assignments.items()
+        }
+
+    # ------------------------------------------------------------
+    # Populate existing ClusterManager.
+    # ------------------------------------------------------------
+
+    cluster_mgr = ClusterManager()
+
+    for node_id in node_ids:
+
+        cluster_id = assignments[node_id]
+
+        nodes[node_id].cluster_id = cluster_id
+
+        cluster_mgr.cluster_to_members.setdefault(
+            cluster_id,
+            [],
+        ).append(node_id)
+
+    # ------------------------------------------------------------
+    # Choose one head per cluster:
+    #
+    # highest physical degree,
+    # tie -> lowest node ID.
+    # ------------------------------------------------------------
+
+    for cluster_id, members in cluster_mgr.cluster_to_members.items():
+
+        members.sort()
+
+        head_id = max(
+            members,
+            key=lambda nid: (
+                len(nodes[nid].original_neighbors),
+                -nid,
+            ),
+        )
+
+        cluster_mgr.cluster_to_head[cluster_id] = head_id
+
+        nodes[head_id].is_cluster_head = True
+
+    # ------------------------------------------------------------
+    # Create logical inter-cluster head chain, matching the
+    # existing Structured overlay representation.
+    # ------------------------------------------------------------
+
+    cluster_ids = sorted(
+        cluster_mgr.cluster_to_head.keys()
+    )
+
+    for i in range(len(cluster_ids) - 1):
+
+        left = cluster_mgr.cluster_to_head[
+            cluster_ids[i]
+        ]
+
+        right = cluster_mgr.cluster_to_head[
+            cluster_ids[i + 1]
+        ]
+
+        nodes[left].gateway_neighbors.append(right)
+        nodes[right].gateway_neighbors.append(left)
+
+    return cluster_mgr

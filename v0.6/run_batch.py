@@ -9,9 +9,11 @@ from ahbn.failure_injector import FailureInjector
 from ahbn.simulator import Simulator
 from ahbn.strategies.ahbn import AHBNStrategy
 from ahbn.strategies.cluster import ClusterStrategy
+from ahbn.strategies.dcsoc import DCSOCStrategy
 from ahbn.strategies.gossip import GossipStrategy
 from ahbn.strategies.hybrid_fixed import HybridFixedStrategy
 from ahbn.topology import (
+    assign_dcsoc_clusters,
     assign_mixed_resources,
     assign_static_clusters,
     build_nodes_from_graph,
@@ -114,11 +116,66 @@ def run_single(
         strategy = build_ahbn_strategy(cfg, fanout=fanout)
 
     elif strategy_name == "hybrid_fixed":
-        cluster_manager = assign_static_clusters(nodes, num_clusters=num_clusters or 4)
-        strategy = HybridFixedStrategy(fanout=fanout if fanout is not None else 3)
+
+        cluster_manager = assign_static_clusters(
+            nodes,
+            num_clusters=num_clusters or 4,
+        )
+
+        strategy = HybridFixedStrategy(
+            fanout=(
+                fanout
+                if fanout is not None
+                else 3
+            )
+        )
+
+    elif strategy_name == "dcsoc":
+
+        dcsoc_cfg = cfg.get(
+            "dcsoc",
+            {},
+        )
+
+        cluster_manager = assign_dcsoc_clusters(
+            nodes,
+            eps=float(
+                dcsoc_cfg.get(
+                    "eps",
+                    2.0,
+                )
+            ),
+            min_samples=int(
+                dcsoc_cfg.get(
+                    "min_samples",
+                    3,
+                )
+            ),
+        )
+
+        strategy = DCSOCStrategy(
+            fanout=int(
+                dcsoc_cfg.get(
+                    "fanout",
+                    (
+                        fanout
+                        if fanout is not None
+                        else 3
+                    ),
+                )
+            ),
+            inter_fanout=int(
+                dcsoc_cfg.get(
+                    "inter_fanout",
+                    1,
+                )
+            ),
+        )
 
     else:
-        raise ValueError(f"Unknown strategy: {strategy_name}")
+        raise ValueError(
+            f"Unknown strategy: {strategy_name}"
+        )
 
     local_cfg = dict(cfg)
     if failure_mode is not None:

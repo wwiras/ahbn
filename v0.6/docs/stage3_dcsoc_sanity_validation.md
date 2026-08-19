@@ -10,7 +10,7 @@ STAGE 3.4 — DC-SoC SANITY VALIDATION status:
 - [X] S2  Cluster heads correctly identified
 - [X] S3  Intra-cluster dissemination observed
 - [X] S4  Cluster-head relay behaviour correct
-- [ ] S5  Duplicate behaviour plausible
+- [X] S5  Duplicate behaviour plausible
 - [ ] S6  Structural update works when triggered
 - [ ] S7  No AHBN runtime controller used
 - [ ] S8  Forwarding remains structurally determined
@@ -106,7 +106,7 @@ For S1, that is perfectly valid because we were testing correctness of assignmen
 #### S2  Cluster-head identification correct
 
 ```bash
-% /Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -m scripts.validate_dcsoc_s2
+% python -m scripts.validate_dcsoc_s2
 ========================================================================
 STAGE 3.4 — DC-SoC SANITY VALIDATION
 S2 — Cluster-head identification correct
@@ -161,7 +161,7 @@ Therefore, freeze the S2 result as:
 #### S3 — Intra-cluster dissemination observed
 
 ```bash
-python -m scripts.validate_dcsoc_s3
+$ python -m scripts.validate_dcsoc_s3
 ========================================================================
 STAGE 3.4 — DC-SoC SANITY VALIDATION
 S3 — Intra-cluster dissemination observed
@@ -291,7 +291,7 @@ sender/receiver cluster membership, and use of a non-noise cluster.
 #### S4 — Cluster-head relay behaviour correct
 
 ```bash
-/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -m scripts.validate_dcsoc_s4
+$ python -m scripts.validate_dcsoc_s4
 ========================================================================
 STAGE 3.4 — DC-SoC SANITY VALIDATION
 S4 — Cluster-head relay behaviour correct
@@ -368,3 +368,125 @@ inter-cluster dissemination validation is made.
 
 > **S4 — PASS.** Cluster-head relay behaviour is correct for the clustering
 > actually produced by the frozen deterministic sanity configuration.
+
+#### S5 — Duplicate behaviour plausible
+
+S5 asks whether duplicate receptions produced by the frozen DC-SoC forwarding
+policy occur only where the observed forwarding structure permits them, and
+whether the simulator counts them consistently. It reconstructs receiver-based
+duplicates independently from the actual processed reception-event order, using
+its own seen-node set rather than the simulator's duplicate-counting helper.
+
+Exact command:
+
+```bash
+$ python -m scripts.validate_dcsoc_s5
+```
+
+Actual output:
+
+```text
+========================================================================
+STAGE 3.4 — DC-SoC SANITY VALIDATION
+S5 — Duplicate behaviour plausible
+========================================================================
+
+Test configuration:
+  Topology type       : BA
+  Topology nodes      : 30
+  Topology edges      : 81
+  BA m                : 3
+  Seed                : 42
+  DBSCAN eps          : 2.0
+  DBSCAN min_samples  : 3
+
+Cluster summary:
+  Cluster 0:
+    Members           : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+    Cluster head      : 5
+
+Transaction:
+  Source node         : 0
+  Source selection    : lowest-ID non-CH member of Cluster 0
+
+Duplicate-accounting semantics:
+  Unit                : processed reception at an active receiver
+  First reception     : marks receiver seen; not a duplicate
+  Later reception     : increments message duplicate count and does not forward
+  Source self-receive : included as the source's first reception
+
+Reception / duplicate trace:
+  #07 t=2.095511: receiver 0 first from 0 (#01), duplicate from 2; cluster=0; roles=source->source, later member->source; overlay=physical; edge=YES
+  #08 t=2.146006: receiver 0 first from 0 (#01), duplicate from 1; cluster=0; roles=source->source, later member->source; overlay=physical; edge=YES
+  #12 t=2.288575: receiver 4 first from 2 (#10), duplicate from 21; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #13 t=2.291514: receiver 0 first from 0 (#01), duplicate from 21; cluster=0; roles=source->source, later member->source; overlay=physical; edge=YES
+  #15 t=3.066196: receiver 6 first from 2 (#09), duplicate from 8; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #16 t=3.113966: receiver 4 first from 2 (#10), duplicate from 12; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #17 t=3.118787: receiver 1 first from 0 (#02), duplicate from 8; cluster=0; roles=source->member, later member->member; overlay=physical; edge=YES
+  #20 t=3.228018: receiver 2 first from 0 (#03), duplicate from 4; cluster=0; roles=source->member, later member->member; overlay=physical; edge=YES
+  #21 t=3.238089: receiver 6 first from 2 (#09), duplicate from 12; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #22 t=3.241379: receiver 21 first from 0 (#04), duplicate from 7; cluster=0; roles=source->member, later member->member; overlay=physical; edge=YES
+  #24 t=3.281973: receiver 2 first from 0 (#03), duplicate from 6; cluster=0; roles=source->member, later member->member; overlay=physical; edge=YES
+  #27 t=3.322653: receiver 11 first from 4 (#25), duplicate from 6; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #28 t=3.373128: receiver 14 first from 8 (#19), duplicate from 7; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #29 t=4.141221: receiver 8 first from 1 (#05), duplicate from 22; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #32 t=4.238493: receiver 16 first from 4 (#18), duplicate from 22; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #33 t=4.256196: receiver 14 first from 8 (#19), duplicate from 16; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #34 t=4.278478: receiver 7 first from 21 (#11), duplicate from 14; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #35 t=4.292854: receiver 27 first from 22 (#30), duplicate from 14; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #37 t=4.319177: receiver 5 first from 11 (#36), duplicate from 16; cluster=0; roles=member->CH, later member->CH; overlay=physical; edge=YES
+  #38 t=4.325506: receiver 22 first from 12 (#14), duplicate from 16; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #39 t=4.340920: receiver 4 first from 2 (#10), duplicate from 11; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #40 t=4.358201: receiver 6 first from 2 (#09), duplicate from 11; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #41 t=4.414717: receiver 7 first from 21 (#11), duplicate from 9; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #42 t=4.420610: receiver 6 first from 2 (#09), duplicate from 26; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #43 t=4.432994: receiver 4 first from 2 (#10), duplicate from 9; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #44 t=4.446364: receiver 26 first from 6 (#26), duplicate from 9; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #47 t=5.198403: receiver 3 first from 14 (#31), duplicate from 27; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #48 t=5.255724: receiver 14 first from 8 (#19), duplicate from 27; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #50 t=5.332814: receiver 22 first from 12 (#14), duplicate from 27; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #52 t=5.345394: receiver 9 first from 7 (#23), duplicate from 5; cluster=0; roles=member->member, later CH->member; overlay=physical; edge=YES
+  #53 t=5.381410: receiver 16 first from 4 (#18), duplicate from 5; cluster=0; roles=member->member, later CH->member; overlay=physical; edge=YES
+  #54 t=5.383986: receiver 4 first from 2 (#10), duplicate from 3; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #55 t=5.468938: receiver 26 first from 6 (#26), duplicate from 28; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #57 t=5.552662: receiver 16 first from 4 (#18), duplicate from 28; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #58 t=5.574233: receiver 7 first from 21 (#11), duplicate from 25; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #59 t=5.615290: receiver 0 first from 0 (#01), duplicate from 25; cluster=0; roles=source->source, later member->source; overlay=physical; edge=YES
+  #60 t=5.648217: receiver 26 first from 6 (#26), duplicate from 25; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #61 t=5.650264: receiver 6 first from 2 (#09), duplicate from 28; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #62 t=6.275619: receiver 3 first from 14 (#31), duplicate from 29; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #63 t=6.339238: receiver 4 first from 2 (#10), duplicate from 29; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #64 t=6.448606: receiver 0 first from 0 (#01), duplicate from 13; cluster=0; roles=source->source, later member->source; overlay=physical; edge=YES
+  #65 t=6.462138: receiver 12 first from 1 (#06), duplicate from 29; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #66 t=6.483391: receiver 0 first from 0 (#01), duplicate from 18; cluster=0; roles=source->source, later member->source; overlay=physical; edge=YES
+  #67 t=6.514939: receiver 6 first from 2 (#09), duplicate from 13; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #68 t=6.536999: receiver 3 first from 14 (#31), duplicate from 13; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+  #69 t=6.617437: receiver 5 first from 11 (#36), duplicate from 18; cluster=0; roles=member->CH, later member->CH; overlay=physical; edge=YES
+  #70 t=6.625239: receiver 3 first from 14 (#31), duplicate from 18; cluster=0; roles=member->member, later member->member; overlay=physical; edge=YES
+
+Accounting summary:
+  Total transmissions              : 69
+  Unique receivers                 : 23
+  Independent duplicate count      : 47
+  Simulator-reported duplicates    : 47
+  Accounting match                 : PASS
+
+Structural plausibility:
+  Duplicate receptions observed    : 47
+  Valid forwarding/overlay edges   : PASS
+
+Checks:
+  [PASS] Duplicate accounting semantics identified
+  [PASS] First receptions are not counted as duplicates
+  [PASS] Observed duplicates are structurally plausible
+  [PASS] Independent duplicate count matches simulator accounting
+  [N/A] Zero-duplicate case structurally justified (duplicates observed)
+
+Final result:
+  S5 duplicate behaviour plausible: PASS
+```
+
+> **S5 — PASS.** Under the tested frozen DC-SoC forwarding policy, the
+> observed duplicate behaviour is structurally plausible and the receiver-based
+> duplicate accounting is internally consistent. This is a sanity result only;
+> it makes no comparative or duplicate-rate claim.

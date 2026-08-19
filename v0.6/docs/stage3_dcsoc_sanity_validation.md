@@ -9,7 +9,7 @@ STAGE 3.4 — DC-SoC SANITY VALIDATION status:
 - [X] S1  Cluster assignment correct
 - [X] S2  Cluster heads correctly identified
 - [X] S3  Intra-cluster dissemination observed
-- [ ] S4  Inter-cluster dissemination observed
+- [X] S4  Cluster-head relay behaviour correct
 - [ ] S5  Duplicate behaviour plausible
 - [ ] S6  Structural update works when triggered
 - [ ] S7  No AHBN runtime controller used
@@ -287,3 +287,84 @@ sender/receiver cluster membership, and use of a non-noise cluster.
 
 > **S3 — PASS.** Intra-cluster dissemination is exercised and observable in
 > the frozen DC-SoC implementation.
+
+#### S4 — Cluster-head relay behaviour correct
+
+```bash
+/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -m scripts.validate_dcsoc_s4
+========================================================================
+STAGE 3.4 — DC-SoC SANITY VALIDATION
+S4 — Cluster-head relay behaviour correct
+========================================================================
+
+Test configuration:
+  Topology type       : BA
+  Topology nodes      : 30
+  Topology edges      : 81
+  BA m                : 3
+  Seed                : 42
+  DBSCAN eps          : 2.0
+  DBSCAN min_samples  : 3
+
+Cluster summary:
+  Cluster 0:
+    Members           : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+    Expected CH       : 5
+    Actual CH         : 5
+
+Transaction:
+  Source node         : 0
+  Source selection    : lowest-ID non-CH member of Cluster 0
+  Source cluster      : 0
+  Cluster head        : 5
+
+CH relay validation:
+  CH reached          : PASS
+  CH relay path       : PASS
+  Other clusters      : 0
+  Valid relay targets : []
+  Selected relay      : []
+  Selected local      : [9, 16, 18]
+  Invalid targets     : 0
+  Fanout budget       : 3/3
+
+Inter-cluster dissemination : NOT EXERCISED
+
+S4 result:
+  Cluster-head relay behaviour : PASS
+
+========================================================================
+S4 RESULT: PASS
+========================================================================
+```
+
+S4 runs the production `DCSOCStrategy` through the production event-driven
+`Simulator`. Validation-only subclasses observe the target list returned by
+the real strategy and the non-self receive events scheduled by the real
+transport path; they do not choose targets, create forwarding events, or
+change dissemination behaviour.
+
+The expected cluster head is derived independently from physical-overlay
+degree using highest degree with lowest node ID as the deterministic
+tie-break. Under the frozen deterministic configuration (BA, 30 nodes,
+`m=3`, seed 42, DBSCAN `eps=2.0`, `min_samples=3`), expected CH Node 5 matched
+observed CH Node 5. The deterministic source was Node 0, selected as the
+lowest-ID non-CH member of non-noise Cluster 0. The transaction reached Node 5
+and caused exactly one first-receive execution of the cluster-head strategy
+path.
+
+The frozen cluster-head path found no valid structured relay targets and used
+the remaining bounded fanout for local targets Nodes 9, 16, and 18. Its three
+scheduled transmissions matched the production strategy output, stayed within
+the configured fanout of 3, and contained zero invalid or noise targets.
+
+This deterministic configuration produces one non-noise cluster, so there are
+zero other clusters and the independently derived valid inter-cluster relay
+target set is empty. S4 confirms that the selected cluster head is reached and
+that cluster-head relay behaviour executes correctly under the frozen
+configuration. No inter-cluster target was fabricated. Therefore,
+**inter-cluster dissemination was NOT EXERCISED**, and no claim of successful
+inter-cluster dissemination validation is made.
+
+> **S4 — PASS.** Cluster-head relay behaviour is correct for the clustering
+> actually produced by the frozen deterministic sanity configuration.

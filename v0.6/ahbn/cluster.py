@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 class ClusterManager:
     cluster_to_members: Dict[int, List[int]] = field(default_factory=dict)
     cluster_to_head: Dict[int, int] = field(default_factory=dict)
+    head_selection: str = "lowest_id"
 
     def get_cluster_members(self, cluster_id: int | None, exclude: int | None = None) -> List[int]:
         if cluster_id is None:

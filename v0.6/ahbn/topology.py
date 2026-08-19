@@ -206,7 +206,16 @@ def assign_static_clusters(
         cluster_mgr.cluster_to_members.setdefault(cluster_id, []).append(node_id)
 
     for cluster_id, members in cluster_mgr.cluster_to_members.items():
-        head_id = _select_cluster_head(members, nodes, resource_aware_heads)
+        if cluster_mgr.head_selection == "highest_physical_degree":
+            head_id = max(
+                members,
+                key=lambda nid: (
+                    len(nodes[nid].original_neighbors),
+                    -nid,
+                ),
+            )
+        else:
+            head_id = _select_cluster_head(members, nodes, resource_aware_heads)
         cluster_mgr.cluster_to_head[cluster_id] = head_id
         nodes[head_id].is_cluster_head = True
 
@@ -448,7 +457,9 @@ def assign_dcsoc_clusters(
     # Populate existing ClusterManager.
     # ------------------------------------------------------------
 
-    cluster_mgr = ClusterManager()
+    cluster_mgr = ClusterManager(
+        head_selection="highest_physical_degree"
+    )
 
     for node_id in node_ids:
 

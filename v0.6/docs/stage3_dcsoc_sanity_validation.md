@@ -11,7 +11,7 @@ STAGE 3.4 — DC-SoC SANITY VALIDATION status:
 - [X] S3  Intra-cluster dissemination observed
 - [X] S4  Cluster-head relay behaviour correct
 - [X] S5  Duplicate behaviour plausible
-- [ ] S6  Structural update works when triggered
+- [X] S6  Structural update works when triggered
 - [ ] S7  No AHBN runtime controller used
 - [ ] S8  Forwarding remains structurally determined
 - [ ] S9  End-to-end propagation works
@@ -490,3 +490,101 @@ Final result:
 > observed duplicate behaviour is structurally plausible and the receiver-based
 > duplicate accounting is internally consistent. This is a sanity result only;
 > it makes no comparative or duplicate-rate claim.
+
+#### S6 — Structural update works when triggered
+
+The S6 validator exercises the production churn path rather than calling the
+repair routine directly:
+
+```bash
+$ python scripts/validate_dcsoc_s6.py
+```
+
+Observed output:
+
+```text
+========================================================================
+STAGE 3.4 — DC-SoC SANITY VALIDATION
+S6 — Structural update works when triggered
+========================================================================
+
+Test configuration:
+  Topology type       : BA
+  Topology nodes      : 30
+  Topology edges      : 81
+  BA m                : 3
+  Seed                : 42
+  DBSCAN eps          : 2.0
+  DBSCAN min_samples  : 3
+
+Frozen structural-update mechanism:
+  Trigger type        : active node availability transition (churn leave/join)
+  Trigger location    : Simulator.run() -> handle_churn_leave()/handle_churn_join()
+  Update function     : repair_topology_after_churn()
+
+Before structural change:
+  Nodes               : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+  Edges               : 81
+  Clusters            : {0: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]}
+  Cluster heads       : {0: 5}
+  Trigger condition   : FALSE
+
+Deterministic trigger event:
+  Change applied      : production churn_leave event
+  Affected node/edge  : node 5; 15 physical edges inactive
+  Reason              : node 5 is the initial CH of Cluster 0
+
+Trigger validation:
+  Expected trigger    : TRUE
+  Actual trigger      : TRUE
+  Trigger check       : PASS
+  Repair counter      : 0 -> 1
+  Update executed     : PASS
+
+After structural update:
+  Nodes               : [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+  Edges               : 66
+  Clusters            : {0: [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]}
+  Cluster heads       : {0: 0}
+  Structure changed   : PASS
+
+Independent reconstruction:
+  Expected clusters   : {0: [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]}
+  Actual clusters     : {0: [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]}
+  Cluster check       : PASS
+  Expected CHs        : {0: 0}
+  Actual CHs          : {0: 0}
+  CH check            : PASS
+
+Structural integrity:
+  One cluster/node    : PASS
+  One CH/cluster      : PASS
+  CH membership       : PASS
+  Noise handling      : PASS
+  Valid references    : PASS
+
+Forwarding-policy isolation:
+  Runtime forwarding adaptation introduced : NO
+  Check                                 : PASS
+
+------------------------------------------------------------------------
+S6 RESULT: PASS
+------------------------------------------------------------------------
+The deterministic node-availability change genuinely satisfied the frozen
+DC-SoC structural-update trigger. The resulting active memberships and
+cluster heads matched the independent post-change reconstruction. No
+unrelated runtime forwarding adaptation was introduced.
+```
+
+Using the frozen BA(30, 3), seed 42, DBSCAN `eps=2.0`, `min_samples=3`
+configuration, it schedules a deterministic `churn_leave` event for the
+initial cluster head (node 5). The validator independently checks the
+availability transition (`FALSE -> TRUE`), observes the simulator's cluster
+repair counter increment, and reconstructs the resulting active memberships
+and heads from the frozen repair semantics (active members, lowest active ID
+as head). The expected and actual structures match, all references remain
+valid, and no runtime forwarding adaptation is introduced.
+
+> **S6 — PASS.** A genuine frozen DC-SoC structural-update trigger caused the
+> normal repair path to run, and the resulting cluster membership and cluster
+> head structure matched an independent reconstruction.

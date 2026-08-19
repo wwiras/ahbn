@@ -14,8 +14,8 @@ STAGE 3.4 — DC-SoC SANITY VALIDATION status:
 - [X] S6  Structural update works when triggered
 - [X] S7  No AHBN runtime controller used
 - [X] S8  Forwarding remains structurally determined
-- [ ] S9  End-to-end propagation works
-- [ ] S10 Same seed/topology is reproducible
+- [X] S9  End-to-end propagation works
+- [X] S10 Same seed/topology is reproducible
 - [ ] S11 AHBN-controller isolation confirmed
 
 #### S1  Cluster assignment correct
@@ -952,3 +952,107 @@ AHBN node control states also produced the same received set.
 > functionally capable of completing end-to-end dissemination through its
 > structurally determined forwarding mechanism, independent of AHBN runtime
 > adaptation.
+
+#### S10 — Baseline deterministic and reproducible
+
+Status: **PASS**
+
+Objective: verify that two independently constructed DC-SoC experiments with
+identical topology, clustering, forwarding, simulator, and transaction
+configuration produce identical physical topology, cluster assignments,
+cluster heads, realized forwarding decisions, and dissemination outcomes.
+
+Implementation: `scripts/validate_dcsoc_s10.py`
+
+Validation method: the validator calls the production topology-to-node,
+DBSCAN-clustering, DC-SoC strategy, and simulator paths twice from fresh state.
+Physical edges are normalized as sorted endpoint pairs. Node-to-cluster maps and
+cluster-head maps are compared directly, and the selected heads are also checked
+against an independent highest-physical-degree/lowest-node-ID oracle. An
+observing simulator records successful production sends and first receptions;
+the validator compares the resulting per-sender target graph, complete ordered
+forwarding-event sequence, received-node set, propagation-trace length, and
+relay sequence. No additional seeds, repetitions, performance measurements, or
+statistical analysis are used.
+
+Exact command:
+
+```bash
+$ python -m scripts.validate_dcsoc_s10
+```
+
+Terminal output example (long identical edge and forwarding lists retained by
+the validator but abbreviated here for readability):
+
+```text
+========================================================================
+STAGE 3.4 — DC-SoC SANITY VALIDATION
+S10 — Baseline deterministic and reproducible
+========================================================================
+
+Test configuration:
+  Topology type       : BA
+  Node count          : 30
+  BA m                : 3
+  Seed                : 42
+  DBSCAN eps          : 2.0
+  DBSCAN min_samples  : 3
+
+Topology reproducibility:
+  Run A edges: [(0, 1), (0, 2), ... (26, 28)]
+  Run B edges: [(0, 1), (0, 2), ... (26, 28)]
+
+Result:
+  PASS
+
+Cluster reproducibility:
+  Run A assignments: {0: 0, 1: 0, ... 29: 0}
+  Run B assignments: {0: 0, 1: 0, ... 29: 0}
+  Run A heads      : {0: 5}
+  Run B heads      : {0: 5}
+  CH rule valid    : PASS
+
+Result:
+  PASS
+
+Forwarding reproducibility:
+  Run A forwarding graph:
+  0 -> [21, 2, 1]
+  1 -> [0, 8, 12]
+  ...
+  29 -> [3, 4, 12]
+  Run B forwarding graph:
+  0 -> [21, 2, 1]
+  1 -> [0, 8, 12]
+  ...
+  29 -> [3, 4, 12]
+
+Result:
+  PASS
+
+Dissemination reproducibility:
+  Received nodes Run A: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 21, 22, 25, 26, 27, 28, 29]
+  Received nodes Run B: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 21, 22, 25, 26, 27, 28, 29]
+  Trace length Run A  : 23
+  Trace length Run B  : 23
+  Relay sequence equal: PASS
+  Forward events equal: PASS
+
+Result:
+  PASS
+
+Overall S10 result:
+  PASS
+```
+
+Observed result: **PASS**. Both fresh BA(30, 3), seed 42 constructions
+produced the same 81 normalized physical edges. Both DBSCAN runs assigned the
+same cluster IDs and selected node 5 as the same rule-valid cluster head. The
+realized sender-to-target forwarding graphs and ordered forwarding events were
+identical. Both transaction runs reached the same 23 nodes with identical
+23-entry first-reception traces and relay sequences.
+
+> **S10 — PASS.** Under identical experimental conditions, the frozen DC-SoC
+> baseline reproducibly constructs the same physical and cluster overlays,
+> makes the same seeded forwarding decisions, and produces the same
+> dissemination result.

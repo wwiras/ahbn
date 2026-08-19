@@ -17,6 +17,7 @@ use_topology_cache: true
 strategies:
   - gossip
   - cluster
+  - dcsoc
   - ahbn
 
 ahbn:

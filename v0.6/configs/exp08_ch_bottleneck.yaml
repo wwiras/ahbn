@@ -15,6 +15,11 @@ ch_overload_factor: [1.0, 1.5, 2.0, 3.0]
 
 use_topology_cache: true
 
+strategies:
+  - cluster
+  - dcsoc
+  - ahbn
+
 ahbn:
   alpha: 0.3
 

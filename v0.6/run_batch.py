@@ -248,14 +248,14 @@ def exp07(cfg: dict) -> tuple[list[ResultRow], list]:
 
     strategies = cfg.get("strategies", ["gossip", "ahbn"])
 
-    for fanout in fanouts:
-        for run_idx in range(runs_per_setting):
-            seed = base_seed + run_idx
+    if "gossip" in strategies:
+        for fanout in fanouts:
+            for run_idx in range(runs_per_setting):
+                seed = base_seed + run_idx
 
-            for strategy_name in strategies:
                 summary = run_single(
                     cfg=cfg,
-                    strategy_name=strategy_name,
+                    strategy_name="gossip",
                     seed=seed,
                     topology_type=topology_type,
                     num_nodes=num_nodes,
@@ -267,13 +267,13 @@ def exp07(cfg: dict) -> tuple[list[ResultRow], list]:
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
                     ba_m=ba_m,
-                    enable_adaptive_trace=(strategy_name == "ahbn"),
+                    enable_adaptive_trace=False,
                     scenario_tag=f"fanout={fanout}",
                 )
                 rows.append(
                     ResultRow(
                         experiment="exp07",
-                        strategy=strategy_name,
+                        strategy="gossip",
                         seed=seed,
                         num_nodes=num_nodes,
                         topology_type=topology_type,
@@ -288,8 +288,47 @@ def exp07(cfg: dict) -> tuple[list[ResultRow], list]:
                     )
                 )
 
-                if "adaptive_trace_rows" in summary:
-                    trace_rows.extend(summary["adaptive_trace_rows"])
+    if "ahbn" in strategies:
+        for run_idx in range(runs_per_setting):
+            seed = base_seed + run_idx
+
+            summary = run_single(
+                cfg=cfg,
+                strategy_name="ahbn",
+                seed=seed,
+                topology_type=topology_type,
+                num_nodes=num_nodes,
+                use_topology_cache=use_topology_cache,
+                base_delay=base_delay,
+                jitter=jitter,
+                message_source=source_id,
+                fanout=None,
+                num_clusters=num_clusters,
+                edge_prob=edge_prob,
+                ba_m=ba_m,
+                enable_adaptive_trace=True,
+                scenario_tag="adaptive",
+            )
+            rows.append(
+                ResultRow(
+                    experiment="exp07",
+                    strategy="ahbn",
+                    seed=seed,
+                    num_nodes=num_nodes,
+                    topology_type=topology_type,
+                    topology_param=edge_prob if topology_type == "er" else ba_m,
+                    fanout=None,
+                    num_clusters=num_clusters,
+                    ch_overload_factor=None,
+                    delivery_ratio=summary["delivery_ratio"],
+                    propagation_delay=summary["propagation_delay"],
+                    duplicates=summary["duplicates"],
+                    total_forwards=summary["total_forwards"],
+                )
+            )
+
+            if "adaptive_trace_rows" in summary:
+                trace_rows.extend(summary["adaptive_trace_rows"])
 
     return rows, trace_rows
 

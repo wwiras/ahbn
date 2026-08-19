@@ -13,7 +13,7 @@ STAGE 3.4 — DC-SoC SANITY VALIDATION status:
 - [X] S5  Duplicate behaviour plausible
 - [X] S6  Structural update works when triggered
 - [X] S7  No AHBN runtime controller used
-- [ ] S8  Forwarding remains structurally determined
+- [X] S8  Forwarding remains structurally determined
 - [ ] S9  End-to-end propagation works
 - [ ] S10 Same seed/topology is reproducible
 - [ ] S11 AHBN-controller isolation confirmed
@@ -725,3 +725,120 @@ Scientific interpretation:
 DC-SoC : structure-adaptive, forwarding-fixed
 AHBN   : runtime forwarding-adaptive
 ```
+
+#### S8 — Forwarding remains structurally determined
+
+Status: **PASS**
+
+Purpose: demonstrate positively that, with RNG state and fixed policy held
+constant, the production DC-SoC target decision is invariant to irrelevant
+`NodeControlState` changes and sensitive to a relevant structural change.
+
+Validation method: the validator calls the real
+`DCSOCStrategy.select_targets()` on the canonical deterministic BA(30, 3),
+seed 42, DBSCAN `eps=2.0`, `min_samples=3` setup. It saves and restores the
+simulator RNG state around comparisons, mutates only the source node's real
+AHBN control fields for the invariance check, then removes a symmetric physical
+link containing a baseline-selected target for the structural-sensitivity
+check. It also checks the production fixed-fanout bound at fanouts 1 and 3.
+
+Exact command:
+
+```bash
+/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -m scripts.validate_dcsoc_s8
+```
+
+Actual output:
+
+```text
+========================================================================
+STAGE 3.4 — DC-SoC SANITY VALIDATION
+S8 — Forwarding remains structurally determined
+========================================================================
+
+Test configuration:
+  Topology type       : BA
+  Topology nodes      : 30
+  Topology edges      : 81
+  BA m                : 3
+  Seed                : 42
+  DBSCAN eps          : 2.0
+  DBSCAN min_samples  : 3
+
+Static implementation inspection:
+  DC-SoC forwarding   : Simulator.handle_receive()
+                        -> DCSOCStrategy.select_targets()
+                        -> same-cluster active physical neighbours
+                        -> CH gateway neighbours when source is a CH
+                        -> fixed fanout/inter-fanout + simulator.rng sampling
+                        -> Simulator.send_message()
+  AHBN state consulted: NO (node.control is not read by select_targets())
+
+Baseline forwarding case:
+  Source node         : 4
+  Cluster             : 0
+  Is cluster head     : NO
+  Physical neighbours : [0, 2, 3, 5, 9, 10, 11, 12, 16, 20, 21, 25, 29]
+  Eligible neighbours : [0, 2, 3, 5, 9, 10, 11, 12, 16, 20, 21, 25, 29]
+  Gateway neighbours  : []
+  Fixed fanout        : 3
+  Fixed inter-fanout  : 1 (not exercised by non-CH source)
+  RNG seed/state      : seed=42; state saved before selection
+  Forwarding targets  : [21, 2, 0]
+
+AHBN control-state invariance:
+  AHBN state before   : {'mode': 'gossip', 'fanout': 3, 'score': 0.0, 'weight': 0.5, 'd_hat': 0.0, 'l_hat': 0.0, 'u_hat': 0.0, 'c_hat': 0.0}
+  AHBN state after    : {'mode': 'cluster', 'fanout': 4, 'score': -1000.0, 'weight': 0.0, 'd_hat': 1.0, 'l_hat': 1.0, 'u_hat': 1.0, 'c_hat': 1.0}
+  Control state changed: PASS
+  Structure unchanged : PASS
+  Fixed policy unchanged: PASS
+  RNG unchanged/reset : PASS
+  Targets before      : [21, 2, 0]
+  Targets after       : [21, 2, 0]
+  Targets identical   : PASS
+  AHBN control-state invariance : PASS
+
+Structural sensitivity:
+  Structural field    : symmetric physical-neighbour link membership
+  Change applied      : remove link 4 <-> 21
+  Original value      : [0, 2, 3, 5, 9, 10, 11, 12, 16, 20, 21, 25, 29]
+  Modified value      : [0, 2, 3, 5, 9, 10, 11, 12, 16, 20, 25, 29]
+  Original targets    : [21, 2, 0]
+  Modified targets    : [25, 2, 0]
+  Removed target absent: PASS
+  Targets changed     : PASS
+  Structural sensitivity : PASS
+
+Fixed-policy sensitivity:
+  Fanout before       : 1
+  Fanout after        : 3
+  Targets before      : [21]
+  Targets after       : [21, 2, 0]
+  Policy effect       : PASS
+
+Required assertions:
+  Valid deterministic case           : PASS
+  Baseline targets structurally valid: PASS
+  AHBN state independently changed   : PASS
+  AHBN-state target invariance       : PASS
+  Valid structural change applied    : PASS
+  Structural target effect observed  : PASS
+  AHBN controller/strategy required  : NO
+
+------------------------------------------------------------------------
+S8 RESULT: PASS
+Forwarding remains structurally determined.
+------------------------------------------------------------------------
+DC-SoC forwarding was invariant under irrelevant AHBN runtime state
+changes with structure, fixed policy, and RNG state held constant.
+A relevant structural change altered the forwarding decision.
+```
+
+> **S8 — PASS.** DC-SoC forwarding remained invariant under changes to
+> irrelevant AHBN runtime control state when structural state, fixed forwarding
+> parameters, and RNG conditions were held constant. Removing a valid physical
+> neighbour link containing a selected target changed `[21, 2, 0]` to
+> `[25, 2, 0]`, and changing fixed fanout from 1 to 3 changed the bounded target
+> count from 1 to 3. Forwarding is therefore determined by DC-SoC structural
+> state, fixed forwarding parameters, and its seeded sampling process rather
+> than AHBN runtime adaptation.

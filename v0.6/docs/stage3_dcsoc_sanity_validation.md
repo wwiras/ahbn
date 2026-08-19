@@ -16,7 +16,7 @@ STAGE 3.4 — DC-SoC SANITY VALIDATION status:
 - [X] S8  Forwarding remains structurally determined
 - [X] S9  End-to-end propagation works
 - [X] S10 Same seed/topology is reproducible
-- [ ] S11 AHBN-controller isolation confirmed
+- [X] S11 AHBN-controller isolation confirmed
 
 #### S1  Cluster assignment correct
 
@@ -1056,3 +1056,117 @@ identical. Both transaction runs reached the same 23 nodes with identical
 > baseline reproducibly constructs the same physical and cluster overlays,
 > makes the same seeded forwarding decisions, and produces the same
 > dissemination result.
+
+#### S11 — AHBN-controller isolation confirmed
+
+Status: **PASS**
+
+Objective: verify runtime isolation between DC-SoC dissemination and AHBN
+adaptive control during an actual deterministic dissemination transaction.
+
+Implementation: `scripts/validate_dcsoc_s11.py`
+
+Validation method: the validator constructs the same BA(30, 3), seed 42,
+DBSCAN `eps=2.0`, `min_samples=3` DC-SoC experiment used by S9 and S10. It
+confirms that `Simulator.controller` is `None`, captures every field of every
+node's `NodeControlState` before and after dissemination, and compares the two
+snapshots directly. Lightweight instrumentation records calls to the shared
+`Simulator.update_ahbn_state()` observation hook, the controller's
+`AHBNController.update_metrics()` method, and its
+`AHBNController.decide_mode_and_fanout()` adaptive-decision method. A tracing
+simulator also observes the production receive, DC-SoC target-selection, and
+send path. Simulator-level observation hooks are shared infrastructure; their
+invocation does not represent AHBN control participation when no controller is
+present.
+
+Exact command:
+
+```bash
+$ python -m scripts.validate_dcsoc_s11
+```
+
+Terminal output:
+
+```text
+========================================================================
+STAGE 3.4 — DC-SoC SANITY VALIDATION
+S11 — AHBN-controller isolation confirmed
+========================================================================
+
+Test configuration:
+  Topology type       : BA
+  Node count          : 30
+  BA m                : 3
+  Seed                : 42
+  DBSCAN eps          : 2.0
+  DBSCAN min_samples  : 3
+
+Controller isolation:
+
+Simulator.controller:
+  None
+
+Result:
+  PASS
+
+AHBN state mutation:
+
+Before == After
+
+Mutation detected:
+  NO
+
+Result:
+  PASS
+
+AHBN runtime control activity:
+
+Simulator.update_ahbn_state():
+  70
+
+AHBNController.update_metrics():
+  0
+
+AHBN adaptive decisions:
+  0
+
+Result:
+  PASS
+
+Forwarding path:
+
+Simulator.handle_receive()
+ ->
+DCSOCStrategy.select_targets()
+ ->
+physical neighbours / CH gateway logic
+ ->
+send_message()
+
+Observed calls:
+  handle_receive        : 70
+  select_targets        : 23
+  send_message          : 69
+
+AHBN intervention:
+  NO
+
+Result:
+  PASS
+
+========================================================================
+S11 RESULT: PASS
+========================================================================
+```
+
+Observed result: **PASS**. The shared simulator observation hook was entered 70
+times, but no AHBN controller update or adaptive decision occurred. All AHBN
+state snapshots remained identical, while 23 DC-SoC target selections produced
+69 sends through the physical-neighbour/cluster-head-gateway mechanism. No
+forwarding decision was modified by AHBN.
+
+> **S11 — PASS.** S11 confirms runtime isolation between DC-SoC and AHBN.
+> During DC-SoC dissemination, the shared simulator may execute observation
+> hooks, but no AHBN controller updates, adaptive decisions, state mutations,
+> or forwarding modifications occur. Therefore, DC-SoC remains an independent
+> topology-structured hybrid baseline suitable for fair comparison with AHBN.

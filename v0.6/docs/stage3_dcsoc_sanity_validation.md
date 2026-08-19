@@ -745,7 +745,7 @@ check. It also checks the production fixed-fanout bound at fanouts 1 and 3.
 Exact command:
 
 ```bash
-/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -m scripts.validate_dcsoc_s8
+$ python -m scripts.validate_dcsoc_s8
 ```
 
 Actual output:
@@ -842,3 +842,113 @@ A relevant structural change altered the forwarding decision.
 > count from 1 to 3. Forwarding is therefore determined by DC-SoC structural
 > state, fixed forwarding parameters, and its seeded sampling process rather
 > than AHBN runtime adaptation.
+
+#### S9 — End-to-end dissemination completes successfully
+
+Status: **PASS**
+
+Objective: demonstrate functionally that one deterministic transaction can
+originate at node 0, propagate for multiple hops through the production DC-SoC
+forwarding path, and reach every node reachable in the realized DC-SoC
+forwarding graph. This check does not require universal gossip-style delivery.
+
+Implementation: `scripts/validate_dcsoc_s9.py`
+
+Validation method: an observing `Simulator` subclass records calls around the
+production `Simulator.send_message()` and `Simulator.handle_receive()` methods
+without changing their behavior. An independent breadth-first traversal of the
+observed forwarding edges calculates the expected reachable set; this avoids
+reimplementing or calling internal DC-SoC target-selection helpers to construct
+the oracle. The validator compares that set with the simulator's first-seen
+delivery records, prints a hop-oriented trace, repeats the complete run with the
+same configuration, and runs it once more after changing every node's
+`NodeControlState` while leaving topology, seed, source, and DC-SoC parameters
+unchanged.
+
+Exact command and output:
+
+```bash
+% python -m scripts.validate_dcsoc_s9
+========================================================================
+STAGE 3.4 — DC-SoC SANITY VALIDATION
+S9 — End-to-end dissemination completes successfully
+========================================================================
+
+Test configuration:
+  Topology type       : BA
+  Node count          : 30
+  Edge count          : 81
+  BA m                : 3
+  Seed                : 42
+  DBSCAN eps          : 2.0
+  DBSCAN min_samples  : 3
+
+Message:
+  Transaction id      : 1
+  Source node         : 0
+
+Propagation trace:
+  Hop 0:
+    source=0 targets=[21, 2, 1]
+  Hop 1:
+    relay=1 targets=[0, 8, 12]
+    relay=2 targets=[0, 4, 6]
+    relay=21 targets=[0, 4, 7]
+  Hop 2:
+    relay=4 targets=[16, 2, 11]
+    relay=6 targets=[2, 11, 26]
+    relay=7 targets=[14, 21, 9]
+    relay=8 targets=[14, 6, 1]
+    relay=12 targets=[6, 4, 22]
+  Hop 3:
+    relay=9 targets=[7, 26, 4]
+    relay=11 targets=[4, 5, 6]
+    relay=14 targets=[27, 3, 7]
+    relay=16 targets=[14, 5, 22]
+    relay=22 targets=[16, 8, 27]
+    relay=26 targets=[25, 6, 28]
+  Hop 4:
+    relay=3 targets=[29, 4, 13]
+    relay=5 targets=[18, 16, 9]
+    relay=25 targets=[0, 26, 7]
+    relay=27 targets=[3, 14, 22]
+    relay=28 targets=[6, 16, 26]
+  Hop 5:
+    relay=13 targets=[0, 3, 6]
+    relay=18 targets=[0, 3, 5]
+    relay=29 targets=[3, 4, 12]
+
+Delivery validation:
+  Expected reachable nodes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 21, 22, 25, 26, 27, 28, 29]
+  Received nodes          : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 21, 22, 25, 26, 27, 28, 29]
+  Missing nodes           : []
+  Source originated       : PASS
+  Multi-hop observed      : PASS
+  Result                  : PASS
+
+Determinism validation:
+  Run 1 received: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 21, 22, 25, 26, 27, 28, 29]
+  Run 2 received: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 21, 22, 25, 26, 27, 28, 29]
+  Result        : PASS
+
+AHBN independence validation:
+  Case A received: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 21, 22, 25, 26, 27, 28, 29]
+  Case B received: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 16, 18, 21, 22, 25, 26, 27, 28, 29]
+  Result         : PASS
+
+------------------------------------------------------------------------
+S9 RESULT: PASS
+
+```
+
+Observed result: **PASS**. For BA(30, 3), seed 42, DBSCAN `eps=2.0` and
+`min_samples=3`, transaction 1 propagated from source node 0 across six trace
+levels (hop 0 through hop 5). The realized forwarding graph contained 23
+reachable nodes; all 23 appeared in the received set and the missing set was
+empty. The second identical run produced the same received set. Changing all
+AHBN node control states also produced the same received set.
+
+> **S9 — PASS.** S9 confirms that the DC-SoC baseline implementation is
+> functionally capable of completing end-to-end dissemination through its
+> structurally determined forwarding mechanism, independent of AHBN runtime
+> adaptation.

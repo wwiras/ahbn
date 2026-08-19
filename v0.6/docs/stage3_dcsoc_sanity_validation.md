@@ -1170,3 +1170,130 @@ forwarding decision was modified by AHBN.
 > hooks, but no AHBN controller updates, adaptive decisions, state mutations,
 > or forwarding modifications occur. Therefore, DC-SoC remains an independent
 > topology-structured hybrid baseline suitable for fair comparison with AHBN.
+
+## Stage 3.5 — Minimal parameter sanity/freeze
+
+Purpose: record and verify the final fixed DC-SoC baseline before comparative
+evaluation. This is a configuration/dependency freeze check, not a correctness
+or performance experiment.
+
+Validation scope: independently inspect the DC-SoC configuration, construction
+branches, DBSCAN cluster/head construction, and forwarding strategy. Confirm
+the BA comparison topology and 30/50/100 experiment sizes; DBSCAN `eps=2.0` and
+`min_samples=3`; highest-physical-degree/lowest-ID cluster-head selection;
+fixed total/gateway fanout `3/1`; intra-cluster and CH-gateway forwarding; and
+no AHBN parameters, EWMA state, thresholds, mode score, adaptive fanout, or
+node control state consumed by DC-SoC.
+
+Command executed:
+
+```bash
+$ python -m scripts.validate_dcsoc_s35_freeze
+```
+
+```text
+=======================================================================
+STAGE 3.5 — DC-SoC MINIMAL PARAMETER SANITY / FREEZE
+========================================================================
+
+DC-SoC baseline parameter snapshot:
+
+Topology type:
+BA
+Supported experiment sizes:
+30 / 50 / 100
+DBSCAN eps:
+2.0
+DBSCAN min_samples:
+3
+Cluster-head rule:
+highest physical degree
+Tie-break:
+lowest node ID
+Forwarding:
+intra-cluster neighbour forwarding + CH gateway forwarding
+Fanout:
+fixed (total=3, CH gateway reserve=1)
+Adaptive control:
+disabled
+
+AHBN parameter consumption:
+
+alpha:
+NO
+beta:
+NO
+gamma:
+NO
+EWMA:
+NO
+thresholds:
+NO
+mode score:
+NO
+adaptive fanout:
+NO
+
+Overall:
+
+AHBN parameters consumed:
+NO
+
+Freeze status:
+
+DC-SoC baseline:
+FROZEN
+AHBN:
+FROZEN_SEPARATELY
+Comparison ready:
+YES
+
+Machine-readable result:
+
+{
+  "ahbn_parameter_consumption": {
+    "adaptive_fanout": false,
+    "ahbn_node_control_state": false,
+    "alpha": false,
+    "beta": false,
+    "ewma": false,
+    "gamma": false,
+    "mode_score": false,
+    "thresholds": false
+  },
+  "ahbn_parameters_consumed": false,
+  "baseline": {
+    "adaptive_control": false,
+    "cluster_head_rule": "highest_physical_degree",
+    "dbscan": {
+      "eps": 2.0,
+      "min_samples": 3
+    },
+    "fanout": 3,
+    "forwarding": "intra_cluster_neighbours_and_ch_gateways",
+    "inter_fanout": 1,
+    "supported_experiment_sizes": [
+      30,
+      50,
+      100
+    ],
+    "tie_break": "lowest_node_id",
+    "topology_type": "BA"
+  },
+  "comparison_ready": true,
+  "errors": [],
+  "stage": "3.5",
+  "status": "PASS"
+}
+
+========================================================================
+STAGE 3.5 RESULT: PASS
+========================================================================
+```
+
+Terminal output summary: all AHBN parameter-consumption fields were `NO`;
+`DC-SoC baseline: FROZEN`, `AHBN: FROZEN_SEPARATELY`, and
+`Comparison ready: YES`. The machine-readable result reported `status: PASS`,
+`comparison_ready: true`, and no errors.
+
+Final status: **PASS — Stage 3 External Hybrid Baseline is complete.**

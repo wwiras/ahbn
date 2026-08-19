@@ -12,7 +12,7 @@ STAGE 3.4 — DC-SoC SANITY VALIDATION status:
 - [X] S4  Cluster-head relay behaviour correct
 - [X] S5  Duplicate behaviour plausible
 - [X] S6  Structural update works when triggered
-- [ ] S7  No AHBN runtime controller used
+- [X] S7  No AHBN runtime controller used
 - [ ] S8  Forwarding remains structurally determined
 - [ ] S9  End-to-end propagation works
 - [ ] S10 Same seed/topology is reproducible
@@ -588,3 +588,140 @@ valid, and no runtime forwarding adaptation is introduced.
 > **S6 — PASS.** A genuine frozen DC-SoC structural-update trigger caused the
 > normal repair path to run, and the resulting cluster membership and cluster
 > head structure matched an independent reconstruction.
+
+#### S7 — No AHBN runtime controller used
+
+Status: **PASS**
+
+Exact command:
+
+```bash
+$ python -m scripts.validate_dcsoc_s7
+```
+
+Actual output:
+
+```text
+========================================================================
+STAGE 3.4 — DC-SoC SANITY VALIDATION
+S7 — No AHBN runtime controller used
+========================================================================
+
+Test configuration:
+  Topology type       : BA
+  Topology nodes      : 30
+  Topology edges      : 81
+  BA m                : 3
+  Seed                : 42
+  DBSCAN eps          : 2.0
+  DBSCAN min_samples  : 3
+
+Static implementation inspection:
+  DC-SoC construction : run_one.build_simulation_from_config('dcsoc')
+                        -> assign_dcsoc_clusters() -> DCSOCStrategy(...)
+                        -> Simulator(..., controller=None)
+  DC-SoC forwarding   : Simulator.handle_receive()
+                        -> DCSOCStrategy.select_targets()
+                        -> same-cluster physical neighbours; CH gateway neighbours
+                        -> seeded bounded sampling -> Simulator.send_message()
+  DC-SoC repair       : churn handler -> repair_topology_after_churn()
+                        -> active neighbours / cluster overlay / CH gateway refresh
+  AHBN control path   : Simulator.update_ahbn_state()
+                        -> normalized observations -> AHBNController.update_metrics()
+                        -> EWMA -> compute_score()/sigmoid()
+                        -> decide_mode_and_fanout() -> node.control
+                        -> AHBNStrategy.select_targets()
+  AHBNStrategy instantiated by DC-SoC : NO
+  AHBN controller dependency          : NONE
+
+DC-SoC forwarding inputs:
+  Cluster membership                  : USED (node.cluster_id)
+  Cluster-head information            : USED (node.is_cluster_head)
+  Physical topology                   : USED (node.neighbors)
+  CH gateway overlay                  : USED (node.gateway_neighbors)
+  Fixed fanout/inter-fanout limits    : USED
+  Simulator seeded RNG                : USED for bounded sampling
+  AHBN EWMA observations              : NOT USED
+  AHBN adaptive score / sigmoid       : NOT USED
+  AHBN runtime mode                   : NOT USED
+  AHBN adaptive fanout                : NOT USED
+  NodeControlState forwarding input   : NOT USED
+  Shared AHBN control fields on Node  : YES
+
+Runtime instrumentation (raising sentinels):
+  Guarded update_ahbn_state dispatches: 70 (returns at controller=None)
+  AHBN sensing calls                  : 0
+  AHBN EWMA/controller update calls   : 0
+  AHBN score/sigmoid calls            : 0
+  AHBN mode/fanout decision calls     : 0
+  AHBNStrategy construction calls     : 0
+  AHBNStrategy forwarding calls       : 0
+  Sentinel triggered                  : NO
+
+DC-SoC transaction:
+  Source node                         : 0
+  Source selection                    : lowest-ID non-CH cluster member
+  Transaction ID                      : dcsoc-s7-transaction
+  Dissemination completed             : YES
+  Delivered nodes                     : 23/30
+  Transmission count                  : 69
+  Duplicate count                     : 47
+
+Structural-maintenance distinction:
+  Structural update capability        : PRESENT
+  AHBN forwarding adaptation          : ABSENT
+
+Validation:
+  DC-SoC dissemination completed      : PASS
+  No AHBN runtime mechanism invoked   : PASS
+  No AHBN-driven forwarding decision  : PASS
+
+------------------------------------------------------------------------
+S7 RESULT: PASS
+------------------------------------------------------------------------
+Conclusion:
+  DC-SoC uses its predefined dissemination policy and structural
+  maintenance mechanism without AHBN runtime forwarding adaptation.
+
+  DC-SoC : structure-adaptive, forwarding-fixed
+  AHBN   : runtime forwarding-adaptive
+```
+
+The validator combines semantic static inspection of the production DC-SoC
+strategy with runtime raising sentinels installed temporarily through
+`unittest.mock.patch`. The deterministic BA(30, 3), seed 42, DBSCAN
+`eps=2.0`, `min_samples=3` transaction completed normally: 23 of 30 nodes
+received the transaction through 69 transmissions, with 47 duplicates.
+
+Observed runtime evidence:
+
+```text
+AHBN sensing calls                  : 0
+AHBN EWMA/controller update calls   : 0
+AHBN score/sigmoid calls            : 0
+AHBN mode/fanout decision calls     : 0
+AHBNStrategy construction calls     : 0
+AHBNStrategy forwarding calls       : 0
+Sentinel triggered                  : NO
+```
+
+All simulator nodes contain the shared `NodeControlState` field, but
+`DCSOCStrategy.select_targets()` does not read it. DC-SoC instead uses cluster
+membership, cluster-head status, physical neighbours, the cluster-head gateway
+overlay, fixed fanout/inter-fanout limits, and the simulator's seeded RNG.
+
+The shared receive path called the guarded `Simulator.update_ahbn_state()` hook
+70 times. This is generic simulator dispatch, not controller execution: the
+hook returned immediately on every call because the DC-SoC simulator has
+`controller=None`. No sensing, EWMA, score, sigmoid, mode, adaptive-fanout, or
+AHBN strategy sentinel was reached.
+
+Scientific interpretation:
+
+> DC-SoC uses its predefined dissemination policy and structural-maintenance
+> mechanism without AHBN runtime forwarding adaptation.
+
+```text
+DC-SoC : structure-adaptive, forwarding-fixed
+AHBN   : runtime forwarding-adaptive
+```

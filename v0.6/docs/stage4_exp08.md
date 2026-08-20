@@ -741,3 +741,105 @@ Warnings/errors: none.
 E2 RESULT: PASS
 
 All 80 frozen Exp08 Gossip runs completed and remain available as individual raw rows. No other comparator ran. E3 was not started.
+
+## E4 — Pre-execution diagnostic deviation note
+
+One unsaved DC-SoC diagnostic simulation was accidentally executed while checking the production construction path.
+
+It invoked `run_single()` and therefore completed a simulation, but its result was neither saved nor incorporated into the E4 dataset. It is classified as a **non-experimental diagnostic run** and excluded from all analysis.
+
+No parameters, algorithms, seeds, overload factors, or experimental settings were changed as a result. The official E4 dataset remains the predefined 80 runs: 20 seeds × 4 overload factors.
+
+### Exact diagnostic command
+
+```bash
+/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -c 'from ahbn.config import load_yaml_config; from run_batch import run_single; cfg=load_yaml_config("configs/exp08_ch_bottleneck.yaml"); d=cfg["dcsoc"]; sim=run_single(cfg=cfg,strategy_name="dcsoc",seed=42,topology_type=cfg["topology_type"],num_nodes=cfg["num_nodes"],use_topology_cache=cfg["use_topology_cache"],base_delay=cfg["base_delay"],jitter=cfg["jitter"],message_source=cfg["message_source"],num_clusters=cfg["num_clusters"],ch_overload_factor=1.0,ba_m=cfg["ba_m"],enable_adaptive_trace=False,scenario_tag="preflight") ; print("Preflight production run summary keys:", sorted(sim.keys()))'
+```
+
+### Complete diagnostic terminal output
+
+```text
+Preflight production run summary keys: ['adaptation_event_count', 'adaptation_rate', 'churn_event_count', 'churn_feedback_update_count', 'churn_join_count', 'churn_leave_count', 'cluster_repair_count', 'delivery_ratio', 'duplicates', 'failed_node_id', 'failure_mode', 'fanout_change_count', 'load_balance_cv', 'max_normalized_load', 'medium_forward_share', 'message_id', 'mode_switch_count', 'propagation_delay', 'recovery_time', 'strong_forward_share', 'total_forwards', 'weak_forward_share']
+```
+
+Diagnostic simulations before official batch: 1, excluded.
+
+The diagnostic result was not saved, substituted for an official observation, used for tuning, or included in any aggregate statistic, confidence interval, table, or figure.
+
+## E4 — Run DC-SoC
+
+### Execution context
+
+- Date: 2026-08-20 (Asia/Kuala_Lumpur)
+- Working directory: `/Users/wwiras/Documents/src/AHBNProj/ahbn/v0.6`
+- Python interpreter: `/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python`
+- Frozen configuration: `configs/exp08_ch_bottleneck.yaml`
+- Selected strategy: `dcsoc` only
+- Seeds: 42–61 inclusive (20 unique seeds)
+- Overload factors: `[1.0, 1.5, 2.0, 3.0]`
+- Runs per overload factor: 20
+- Official E4 experimental runs: 80
+- Diagnostic simulations before official batch: 1, excluded
+- Recorded E4 dataset rows / runs used for analysis: 80
+- Frozen DC-SoC parameters: `eps=2.0`, `min_samples=3`, `fanout=3`, `inter_fanout=1`
+- Overload targeting: E1-validated architecture-specific DBSCAN-derived DC-SoC cluster heads, resolved by the production construction path and runtime `is_cluster_head` state.
+
+Only DC-SoC was executed in the official E4 batch. The earlier unsaved diagnostic result was not reused or substituted.
+
+### Exact official execution command
+
+```bash
+cd /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.6
+
+/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -c 'from ahbn.config import load_yaml_config; from ahbn.utils import save_results_csv; from run_batch import exp08; cfg = load_yaml_config("configs/exp08_ch_bottleneck.yaml"); run_cfg = dict(cfg); run_cfg["strategies"] = ["dcsoc"]; d = run_cfg["dcsoc"]; print("E4 Exp08 DC-SoC-only execution"); print("Config: configs/exp08_ch_bottleneck.yaml"); print("Strategy: dcsoc"); print("Seeds: 42-61"); print("Unique seeds expected: 20"); print("Overload factors: [1.0, 1.5, 2.0, 3.0]"); print("Runs per overload factor: 20"); print("Intended runs: 80"); print(f"Frozen DC-SoC parameters: eps={d[chr(101)+chr(112)+chr(115)]}, min_samples={d[chr(109)+chr(105)+chr(110)+chr(95)+chr(115)+chr(97)+chr(109)+chr(112)+chr(108)+chr(101)+chr(115)]}, fanout={d[chr(102)+chr(97)+chr(110)+chr(111)+chr(117)+chr(116)]}, inter_fanout={d[chr(105)+chr(110)+chr(116)+chr(101)+chr(114)+chr(95)+chr(102)+chr(97)+chr(110)+chr(111)+chr(117)+chr(116)]}"); print("Overload targeting: DC-SoC architecture-specific DBSCAN-derived cluster heads via runtime is_cluster_head"); rows, trace_rows = exp08(run_cfg); path = save_results_csv(rows, "outputs/csv/exp08_dcsoc_results.csv"); print(f"Completed runs: {len(rows)}"); print(f"Adaptive trace rows: {len(trace_rows)}"); print(f"Saved {path}")' 2>&1 | tee outputs/logs/exp08_e4_dcsoc.log
+```
+
+### Complete official terminal output
+
+```text
+E4 Exp08 DC-SoC-only execution
+Config: configs/exp08_ch_bottleneck.yaml
+Strategy: dcsoc
+Seeds: 42-61
+Unique seeds expected: 20
+Overload factors: [1.0, 1.5, 2.0, 3.0]
+Runs per overload factor: 20
+Intended runs: 80
+Frozen DC-SoC parameters: eps=2.0, min_samples=3, fanout=3, inter_fanout=1
+Overload targeting: DC-SoC architecture-specific DBSCAN-derived cluster heads via runtime is_cluster_head
+Completed runs: 80
+Adaptive trace rows: 0
+Saved outputs/csv/exp08_dcsoc_results_20260820_114555.csv
+```
+
+Warnings/errors: none.
+
+### Output and post-run validation
+
+- Raw/per-run results: `outputs/csv/exp08_dcsoc_results_20260820_114555.csv`
+- Terminal log: `outputs/logs/exp08_e4_dcsoc.log`
+- CSV rows: 80
+- Strategies present: `dcsoc` only; no Gossip, Structured/cluster, or AHBN rows
+- Unique seeds: 20; exact set 42–61; minimum 42, maximum 61
+- Overload factors: exactly 1.0, 1.5, 2.0, and 3.0
+- Rows per overload factor: 20 each
+- Expected Exp08 schema: present
+- Adaptive trace rows: 0 (expected for the fixed DC-SoC comparator)
+- Delivery ratio range: 0.69–0.94
+- Propagation delay range: 6.8187090117–15.2569962441 seconds
+- Duplicates range: 139–189
+- Total forwards range: 207–282
+- Frozen parameters after run: `eps=2.0`, `min_samples=3`, `fanout=3`, `inter_fanout=1`
+- Architecture-specific overload targeting: preserved
+- E2 Gossip SHA-256 unchanged: `9f164955e1cd1bae972af43b24480e996abf3b41fc5a8314efe5500f140f97c5`
+- E3 Structured SHA-256 unchanged: `0ee7e3e5e49d0cc4e101427cf02e9e9c29a05b7399c916f81f61b7d3b60d1c59`
+- E4 CSV SHA-256: `1e4ede149ddcd5ebae4664ea7a29ba85c87af5d9053488693eb921b4d46831b1`
+- E4 log SHA-256: `f99af22b0303d9e12980fafaa6edab787655009ef2f0be9e61d1cd34ac0c0029`
+- Scientific implementation/configuration changes during E4: none
+- Post-run validation: PASS
+
+### Result
+
+E4 RESULT: PASS
+
+The official E4 dataset contains exactly the predefined 80 recorded observations. The one earlier diagnostic simulation remains transparently documented and excluded from the experimental dataset and all analysis. No AHBN implementation was modified. No DC-SoC tuning was performed. Frozen Stage 3.5 DC-SoC parameters and the E1-validated architecture-specific DC-SoC overload targeting were preserved. Existing E2/E3 outputs were not modified. E5 was not started.

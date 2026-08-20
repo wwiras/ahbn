@@ -674,3 +674,70 @@ E1 RESULT: PASS
 ### Scientific interpretation
 
 E1 confirmed that the Exp08 overload condition is injected into the architecture-specific CH/bottleneck role for Gossip, Structured, DC-SoC, and AHBN; activates at the configured point; affects the intended target rather than unrelated nodes; and does not directly alter the frozen dissemination or controller mechanisms. Gossip remains the intentionally CH-independent reference and therefore has no directly overloaded node.
+
+## E2 — Run Gossip
+
+### Execution context
+
+- Date: 2026-08-20 (Asia/Kuala_Lumpur)
+- Working directory: `/Users/wwiras/Documents/src/AHBNProj/ahbn/v0.6`
+- Python interpreter: `/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python`
+- Frozen configuration: `configs/exp08_ch_bottleneck.yaml`
+- Selected strategy: `gossip` only
+- Topology: BA, 100 nodes, `m=3`, topology cache enabled
+- Seeds: 42–61
+- Intended runs: 80 (20 seeds × 4 overload factors)
+- Gossip fanout: 3 (frozen runner default)
+- `ch_overload_factor`: `[1.0, 1.5, 2.0, 3.0]`
+- Activation: simulator construction/run start (`t=0`)
+- Resolved bottleneck semantics: Gossip is the CH-independent dissemination reference; it assigns no cluster-head role and therefore has no direct CH-overload target.
+- Expected output: timestamped raw/per-run CSV under `outputs/csv/` and terminal log under `outputs/logs/`.
+
+`run_batch.py` exposes only `--config`; it has no single-strategy CLI option. The execution therefore used a minimal inline orchestration command: it loaded the frozen YAML, shallow-copied the loaded mapping, restricted only the `exp08()` strategy iteration to `gossip`, then invoked the existing production `exp08()` runner and `save_results_csv()` output path. It did not implement or modify experimental behavior, forwarding, randomization, configuration values, overload semantics, or metric collection.
+
+Only Gossip was executed.
+
+### Exact command
+
+```bash
+cd /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.6
+
+/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -c 'from ahbn.config import load_yaml_config; from ahbn.utils import save_results_csv; from run_batch import exp08; cfg = load_yaml_config("configs/exp08_ch_bottleneck.yaml"); run_cfg = dict(cfg); run_cfg["strategies"] = ["gossip"]; print("E2 Exp08 Gossip-only execution"); print("Config: configs/exp08_ch_bottleneck.yaml"); print("Strategy: gossip"); print("Seeds: 42-61"); print("Overload factors: [1.0, 1.5, 2.0, 3.0]"); print("Intended runs: 80"); rows, trace_rows = exp08(run_cfg); path = save_results_csv(rows, "outputs/csv/exp08_gossip_results.csv"); print(f"Completed runs: {len(rows)}"); print(f"Adaptive trace rows: {len(trace_rows)}"); print(f"Saved {path}")' 2>&1 | tee outputs/logs/exp08_e2_gossip.log
+```
+
+### Complete terminal output
+
+```text
+E2 Exp08 Gossip-only execution
+Config: configs/exp08_ch_bottleneck.yaml
+Strategy: gossip
+Seeds: 42-61
+Overload factors: [1.0, 1.5, 2.0, 3.0]
+Intended runs: 80
+Completed runs: 80
+Adaptive trace rows: 0
+Saved outputs/csv/exp08_gossip_results_20260820_111017.csv
+```
+
+Warnings/errors: none.
+
+### Output and sanity checks
+
+- Raw/per-run results: `outputs/csv/exp08_gossip_results_20260820_111017.csv`
+- Terminal log: `outputs/logs/exp08_e2_gossip.log`
+- Completed rows: 80
+- Strategies present: `gossip` only
+- Unique seeds: 20; minimum 42, maximum 61
+- Rows per overload factor: 20 for each of 1.0, 1.5, 2.0, and 3.0
+- Delivery ratio range: 0.76–0.92
+- Propagation delay range: 8.6104107855–11.8554085614 seconds
+- Duplicates range: 153–185
+- Total forwards range: 228–276
+- Results SHA-256: `9f164955e1cd1bae972af43b24480e996abf3b41fc5a8314efe5500f140f97c5`
+- Log SHA-256: `c6603701160ff8331212dbc4d5ef65faa7a8e1c186c4b2c5ea421b18b9fa276f`
+
+### Result
+
+E2 RESULT: PASS
+
+All 80 frozen Exp08 Gossip runs completed and remain available as individual raw rows. No other comparator ran. E3 was not started.

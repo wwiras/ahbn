@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import argparse
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.stats import t
 
 from ahbn.utils import ensure_dir, extract_timestamp_from_filename
 
@@ -94,119 +95,50 @@ def plot_exp07(df: pd.DataFrame, ts: str, use_offset: bool) -> None:
 
     df_compare = df[df["strategy"].isin(["gossip", "ahbn"])].copy()
 
-    grouped_compare = (
-        df_compare.groupby(["strategy", "fanout"])
-        .agg(
-            delay_mean=("propagation_delay", "mean"),
-            dup_mean=("duplicates", "mean"),
-        )
-        .reset_index()
-    )
+    gossip = df_compare[df_compare["strategy"] == "gossip"].copy()
+    ahbn = df_compare[df_compare["strategy"] == "ahbn"].copy()
+    if gossip.empty or ahbn.empty:
+        raise ValueError("Exp07 requires both Gossip and AHBN result rows.")
+    if ahbn["fanout"].notna().any():
+        raise ValueError("Exp07 AHBN result fanout must be blank (adaptive reference).")
 
-    strategies = ["gossip", "ahbn"]
-    strategies = [s for s in strategies if s in grouped_compare["strategy"].unique()]
-
-    offsets = (
-        {"gossip": -0.05, "ahbn": 0.05}
-        if use_offset
-        else {s: 0.0 for s in strategies}
-    )
-
-    x_ticks = sorted(df_compare["fanout"].dropna().unique())
-
-    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
-
-    for s in strategies:
-        part = grouped_compare[grouped_compare["strategy"] == s].sort_values("fanout")
-        x = apply_offset(part["fanout"], offsets[s])
-        axes[0].plot(x, part["delay_mean"], marker="o", label=s)
-
-    axes[0].set_xlabel("Fanout")
-    axes[0].set_ylabel("Propagation Delay")
-    axes[0].set_title("Delay vs Fanout")
-    axes[0].set_xticks(x_ticks)
-    axes[0].legend()
-    axes[0].grid(True, linestyle=":")
-
-    for s in strategies:
-        part = grouped_compare[grouped_compare["strategy"] == s].sort_values("fanout")
-        x = apply_offset(part["fanout"], offsets[s])
-        axes[1].plot(x, part["dup_mean"], marker="o", label=s)
-
-    axes[1].set_xlabel("Fanout")
-    axes[1].set_ylabel("Duplicates")
-    axes[1].set_title("Duplicates vs Fanout")
-    axes[1].set_xticks(x_ticks)
-    axes[1].legend()
-    axes[1].grid(True, linestyle=":")
-
-    plt.tight_layout()
-    out_combined = get_plot_output_path("exp07", ts)
-    plt.savefig(out_combined, bbox_inches="tight")
-    plt.close()
-
-    print(f"Saved {out_combined}")
-
-    grouped_full = (
-        df.groupby(["fanout", "strategy"], as_index=False)[
-            ["delivery_ratio", "propagation_delay", "duplicates"]
-        ]
-        .mean()
-        .sort_values(["fanout", "strategy"])
-    )
-
-    preferred_order = ["ahbn", "gossip", "hybrid_fixed", "cluster"]
-    full_strategies = [s for s in preferred_order if s in grouped_full["strategy"].unique()]
-    for s in grouped_full["strategy"].unique():
-        if s not in full_strategies:
-            full_strategies.append(s)
+    metrics = [
+        ("delivery_ratio", "Delivery Ratio"),
+        ("propagation_delay", "Propagation Delay"),
+        ("duplicates", "Duplicates"),
+    ]
+    x_ticks = sorted(gossip["fanout"].dropna().unique())
+    if x_ticks != [2, 3, 4, 5, 6]:
+        raise ValueError(f"Expected Gossip fanouts [2, 3, 4, 5, 6], got {x_ticks}")
 
     fig3, axes3 = plt.subplots(1, 3, figsize=(18, 5))
+    for ax, (metric, label) in zip(axes3, metrics):
+        grouped = gossip.groupby("fanout")[metric].agg(["count", "mean", "std"]).reset_index()
+        critical = grouped["count"].map(lambda n: t.ppf(0.975, n - 1))
+        half_width = critical * grouped["std"] / grouped["count"].pow(0.5)
+        ahbn_n = ahbn[metric].count()
+        ahbn_mean = ahbn[metric].mean()
+        ahbn_half_width = t.ppf(0.975, ahbn_n - 1) * ahbn[metric].std() / ahbn_n**0.5
 
-    ax = axes3[0]
-    for strategy in full_strategies:
-        subset = grouped_full[grouped_full["strategy"] == strategy]
-        ax.plot(
-            subset["fanout"],
-            subset["delivery_ratio"],
-            marker="o",
-            label=strategy,
+        ax.errorbar(
+            grouped["fanout"], grouped["mean"], yerr=half_width,
+            marker="o", capsize=4, linewidth=1.8, label="Gossip (fixed fanout)",
         )
-    ax.set_title("Delivery Ratio vs Fanout")
-    ax.set_xlabel("Fanout")
-    ax.set_ylabel("Delivery Ratio")
-    ax.grid(True, linestyle=":")
-    ax.legend()
-
-    ax = axes3[1]
-    for strategy in full_strategies:
-        subset = grouped_full[grouped_full["strategy"] == strategy]
-        ax.plot(
-            subset["fanout"],
-            subset["propagation_delay"],
-            marker="o",
-            label=strategy,
+        ax.axhspan(
+            ahbn_mean - ahbn_half_width,
+            ahbn_mean + ahbn_half_width,
+            color="tab:orange", alpha=0.16,
         )
-    ax.set_title("Delay vs Fanout")
-    ax.set_xlabel("Fanout")
-    ax.set_ylabel("Propagation Delay")
-    ax.grid(True, linestyle=":")
-    ax.legend()
-
-    ax = axes3[2]
-    for strategy in full_strategies:
-        subset = grouped_full[grouped_full["strategy"] == strategy]
-        ax.plot(
-            subset["fanout"],
-            subset["duplicates"],
-            marker="o",
-            label=strategy,
+        ax.axhline(
+            ahbn_mean, color="tab:orange", linestyle="--", linewidth=1.8,
+            label="AHBN (adaptive)",
         )
-    ax.set_title("Duplicates vs Fanout")
-    ax.set_xlabel("Fanout")
-    ax.set_ylabel("Duplicates")
-    ax.grid(True, linestyle=":")
-    ax.legend()
+        ax.set_title(f"{label} vs Gossip Fanout")
+        ax.set_xlabel("Fixed Gossip Fanout")
+        ax.set_ylabel(label)
+        ax.set_xticks(x_ticks)
+        ax.grid(True, linestyle=":")
+        ax.legend()
 
     fig3.tight_layout()
     out_3panel = get_exp07_3panel_output_path(ts)

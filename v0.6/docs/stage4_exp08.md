@@ -843,3 +843,82 @@ Warnings/errors: none.
 E4 RESULT: PASS
 
 The official E4 dataset contains exactly the predefined 80 recorded observations. The one earlier diagnostic simulation remains transparently documented and excluded from the experimental dataset and all analysis. No AHBN implementation was modified. No DC-SoC tuning was performed. Frozen Stage 3.5 DC-SoC parameters and the E1-validated architecture-specific DC-SoC overload targeting were preserved. Existing E2/E3 outputs were not modified. E5 was not started.
+
+## E5 — Run AHBN
+
+### Purpose and execution context
+
+Execute the frozen AHBN-only Exp08 production matrix and preserve its naturally generated adaptive traces for E6. This was execution and basic integrity validation only; no behavioural analysis, tuning, repair, or scientific reinterpretation was performed.
+
+- Date: 2026-08-20 (Asia/Kuala_Lumpur)
+- Working directory: `/Users/wwiras/Documents/src/AHBNProj/ahbn/v0.6`
+- Python interpreter: `/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python`
+- Authoritative configuration: `configs/exp08_ch_bottleneck.yaml`
+- Strategy: `ahbn` only
+- Seeds: 42–61 inclusive (20 unique seeds)
+- Overload factors: `[1.0, 1.5, 2.0, 3.0]`
+- Runs per overload factor: 20
+- Intended and actual completed runs: 80
+- Frozen parameters consumed: `alpha=0.3`, centers `(0.5,0.5,0.5,0.5)`, weights `(-1,+1,-1,+1)`, `kappa=1`, `beta=1`, fanout bounds `[2,4]`, mode threshold `0.5`, default fanout `3`
+- Adaptive tracing: enabled by the existing production `exp08()` path for AHBN
+- Other comparators executed during E5: none
+- Extra AHBN simulations before or after the batch: none
+
+`run_batch.py` has no single-strategy CLI option. As in E2–E4, the production execution loaded the frozen YAML, shallow-copied the loaded mapping, restricted only the strategy iteration to `ahbn`, and invoked the existing `exp08()` production function. Both output writers are the existing canonical utilities.
+
+### Exact production command
+
+```bash
+cd /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.6
+
+/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python -c 'from ahbn.config import load_yaml_config; from ahbn.utils import save_results_csv, save_adaptive_trace_csv; from run_batch import exp08; cfg = load_yaml_config("configs/exp08_ch_bottleneck.yaml"); run_cfg = dict(cfg); run_cfg["strategies"] = ["ahbn"]; a = run_cfg["ahbn"]; print("E5 Exp08 AHBN-only execution"); print("Config: configs/exp08_ch_bottleneck.yaml"); print("Strategy: ahbn"); print("Seeds: 42-61"); print("Unique seeds expected: 20"); print("Overload factors: [1.0, 1.5, 2.0, 3.0]"); print("Runs per overload factor: 20"); print("Intended runs: 80"); print(f"Frozen AHBN parameters: alpha={a[chr(97)+chr(108)+chr(112)+chr(104)+chr(97)]}, centers=({a[chr(100)+chr(48)]},{a[chr(108)+chr(48)]},{a[chr(117)+chr(48)]},{a[chr(99)+chr(48)]}), weights=({a[chr(119)+chr(95)+chr(100)]},{a[chr(119)+chr(95)+chr(108)]},{a[chr(119)+chr(95)+chr(117)]},{a[chr(119)+chr(95)+chr(99)]}), kappa={a[chr(107)+chr(97)+chr(112)+chr(112)+chr(97)]}, beta={a[chr(98)+chr(101)+chr(116)+chr(97)]}, fanout=[{a[chr(109)+chr(105)+chr(110)+chr(95)+chr(102)+chr(97)+chr(110)+chr(111)+chr(117)+chr(116)]},{a[chr(109)+chr(97)+chr(120)+chr(95)+chr(102)+chr(97)+chr(110)+chr(111)+chr(117)+chr(116)]}], threshold={a[chr(109)+chr(111)+chr(100)+chr(101)+chr(95)+chr(116)+chr(104)+chr(114)+chr(101)+chr(115)+chr(104)+chr(111)+chr(108)+chr(100)]}, default_fanout={a[chr(100)+chr(101)+chr(102)+chr(97)+chr(117)+chr(108)+chr(116)+chr(95)+chr(102)+chr(97)+chr(110)+chr(111)+chr(117)+chr(116)]}"); rows, trace_rows = exp08(run_cfg); path = save_results_csv(rows, "outputs/csv/exp08_ahbn_results.csv"); trace_path = save_adaptive_trace_csv(trace_rows, "outputs/csv/exp08_ahbn_adaptive_trace.csv", add_timestamp=True); print(f"Completed runs: {len(rows)}"); print(f"Adaptive trace rows: {len(trace_rows)}"); print(f"Saved {path}"); print(f"Saved {trace_path}")' 2>&1 | tee outputs/logs/exp08_e5_ahbn.log
+```
+
+### Complete terminal output
+
+```text
+E5 Exp08 AHBN-only execution
+Config: configs/exp08_ch_bottleneck.yaml
+Strategy: ahbn
+Seeds: 42-61
+Unique seeds expected: 20
+Overload factors: [1.0, 1.5, 2.0, 3.0]
+Runs per overload factor: 20
+Intended runs: 80
+Frozen AHBN parameters: alpha=0.3, centers=(0.5,0.5,0.5,0.5), weights=(-1.0,1.0,-1.0,1.0), kappa=1.0, beta=1.0, fanout=[2,4], threshold=0.5, default_fanout=3
+Completed runs: 80
+Adaptive trace rows: 19985
+Saved outputs/csv/exp08_ahbn_results_20260820_115817.csv
+Saved outputs/csv/exp08_ahbn_adaptive_trace_20260820_115817.csv
+```
+
+Warnings/errors: none.
+
+### Outputs and sanity checks
+
+- Raw/per-run results: `outputs/csv/exp08_ahbn_results_20260820_115817.csv`
+- Adaptive trace: `outputs/csv/exp08_ahbn_adaptive_trace_20260820_115817.csv`
+- Terminal log: `outputs/logs/exp08_e5_ahbn.log`
+- Result rows: exactly 80; no duplicate strategy/seed/overload combinations
+- Strategy isolation: `ahbn` only
+- Seeds: exact complete set 42–61; 20 unique; minimum 42; maximum 61
+- Overload factors: exactly 1.0, 1.5, 2.0, and 3.0; 20 rows each
+- Required fields: `delivery_ratio`, `propagation_delay`, `duplicates`, and `total_forwards` present with no missing, NaN, or infinite values
+- Delivery ratio range: 0.70–0.95, entirely within `[0,1]`
+- Propagation delay range: 7.6439283606–16.7392140870 seconds
+- Duplicates range: 141–191; no negative values
+- Total forwards range: 210–285; no negative values
+- Adaptive trace rows: 19,985; all tagged `ahbn`; all 20 seeds and all four overload scenario tags present; no missing experiment/strategy/seed/scenario context
+- Frozen AHBN source/config changes during E5: none
+- E2 Gossip SHA-256 unchanged: `9f164955e1cd1bae972af43b24480e996abf3b41fc5a8314efe5500f140f97c5`
+- E3 Structured SHA-256 unchanged: `0ee7e3e5e49d0cc4e101427cf02e9e9c29a05b7399c916f81f61b7d3b60d1c59`
+- E4 DC-SoC SHA-256 unchanged: `1e4ede149ddcd5ebae4664ea7a29ba85c87af5d9053488693eb921b4d46831b1`
+- E5 results SHA-256: `f0011b3ca87c6794832ead9793010d3aa27d5811ead72c980ac6b587674f60ac`
+- E5 adaptive trace SHA-256: `2e7ab084cf1abe8bcdde28dfe4806940055146eb54011709535a4e972ccb3362`
+- E5 log SHA-256: `19757a2cb1aaa7e9e0374e41b7953c3e110e765b2ad44a76ce7c9e79a534c5de`
+
+### Result
+
+E5 RESULT: PASS
+
+Exactly 80 intended AHBN production executions completed, with no additional AHBN simulations. The result matrix, basic numeric integrity, strategy isolation, frozen implementation protection, prior-output preservation, and adaptive trace existence checks all passed. Behavioural interpretation is deferred to E6.

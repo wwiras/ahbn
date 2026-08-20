@@ -484,3 +484,193 @@ E1 — Validate CH-overload injection
 E0 RESULT: PASS
 
 E0.1 reconciliation complete. Ready for E1; E1 was not executed.
+## E1 — Validate CH-Overload Injection
+
+### Purpose
+
+Independently validate that the frozen Exp08 `ch_overload_factor` condition applies its added one-hop arrival latency only to each comparator's architecture-specific cluster-head/bottleneck role, activates from simulation start, preserves non-target nodes, and does not directly mutate forwarding or controller policy. This validation does not run the final comparative experiment.
+
+### Files inspected
+
+- `configs/exp08_ch_bottleneck.yaml`
+- `docs/stage4_exp08.md`
+- `scripts/inspect_exp08_e0.py`
+- `run_batch.py`
+- `ahbn/simulator.py`
+- `ahbn/node.py`
+- `ahbn/topology.py`
+- `ahbn/cluster.py`
+- `ahbn/control.py`
+- `ahbn/strategies/gossip.py`
+- `ahbn/strategies/cluster.py`
+- `ahbn/strategies/dcsoc.py`
+- `ahbn/strategies/ahbn.py`
+
+### Validation script
+
+Created `scripts/validate_exp08_e1.py`. It constructs paired normal (`ch_overload_factor=1.0`) and overloaded (`ch_overload_factor=3.0`) simulators through the production Exp08 construction path without executing the event queue or producing comparative measurements. It independently calculates expected Structured/AHBN heads from the round-robin/lowest-ID rule and DC-SoC heads from runtime DBSCAN membership plus the independently applied highest-physical-degree/tie-lowest-ID rule. Deterministic paired probes then validate the exact delay delta for every node and snapshot policy state before and after injection.
+
+Exp08 has no later overload event trigger: `ch_overload_factor` is active from simulator construction/run start (`t=0`). The runtime parameter changes CH-destination arrival delay; it does not change `Node.processing_delay`, queue service capacity, `Node.is_overloaded`, or forwarding policy.
+
+### Command
+
+```bash
+cd /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.6
+/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python scripts/validate_exp08_e1.py
+```
+
+Exact interpreter: `/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python`
+
+### Complete terminal output
+
+```text
+========================================================================
+STAGE 4 — EXP08
+E1 — Validate CH-Overload Injection
+========================================================================
+
+Configuration:
+  Config              : configs/exp08_ch_bottleneck.yaml
+  Python              : /Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python
+  Comparators         : gossip, cluster, dcsoc, ahbn
+  Seed                : 42
+  Activation          : simulator construction / run start (t=0)
+  Normal value        : ch_overload_factor=1.0
+  Overloaded value    : ch_overload_factor=3.0
+
+------------------------------------------------------------------------
+GOSSIP
+------------------------------------------------------------------------
+Relevant bottleneck role : CH-independent static Gossip reference (no CH target)
+Expected target           : []
+Runtime target            : []
+Target-selection basis    : no native or mapped CH; expected empty target set
+Target resolution         : PASS
+
+Before overload (t=0, factor=1.0):
+  Target                  : none by architecture
+  Node 0   one-hop delay : 1.127885359692
+
+After overload (t=0, configured run factor):
+  Target                  : none; no delay injected (expected)
+  Node 0   one-hop delay : 1.127885359692
+  Non-target added delay  : 0.000000000000
+  processing_delay        : 0.0 before / 0.0 after (unchanged)
+Injection observed        : NO (expected: no CH target)
+Non-target unexpectedly overloaded: NO
+Injection activation      : PASS
+Target isolation          : PASS
+Forwarding-policy intact  : PASS
+Comparator isolation      : PASS
+Deterministic replay      : PASS
+Result                    : PASS
+
+------------------------------------------------------------------------
+CLUSTER
+------------------------------------------------------------------------
+Relevant bottleneck role : static Structured cluster heads
+Expected target           : [0, 1, 2, 3]
+Runtime target            : [0, 1, 2, 3]
+Target-selection basis    : round-robin clusters; lowest node ID per cluster
+Target resolution         : PASS
+
+Before overload (t=0, factor=1.0):
+  Node 0   one-hop delay : 1.127885359692
+  Node 4   one-hop delay : 1.147294242833
+
+After overload (t=0, configured run factor):
+  Node 0   one-hop delay : 3.127885359692
+  Observed added delay    : 2.000000000000
+  Node 4   one-hop delay : 1.147294242833
+  Non-target added delay  : 0.000000000000
+  processing_delay        : 0.0 before / 0.0 after (unchanged)
+Injection observed        : YES
+Non-target unexpectedly overloaded: NO
+Injection activation      : PASS
+Target isolation          : PASS
+Forwarding-policy intact  : PASS
+Comparator isolation      : PASS
+Deterministic replay      : PASS
+Result                    : PASS
+
+------------------------------------------------------------------------
+DC-SOC
+------------------------------------------------------------------------
+Relevant bottleneck role : DBSCAN-derived density-cluster heads
+Expected target           : [4]
+Runtime target            : [4]
+Target-selection basis    : DBSCAN membership; highest physical degree, tie -> lowest ID
+Target resolution         : PASS
+
+Before overload (t=0, factor=1.0):
+  Node 4   one-hop delay : 1.147294242833
+  Node 0   one-hop delay : 1.127885359692
+
+After overload (t=0, configured run factor):
+  Node 4   one-hop delay : 3.147294242833
+  Observed added delay    : 2.000000000000
+  Node 0   one-hop delay : 1.127885359692
+  Non-target added delay  : 0.000000000000
+  processing_delay        : 0.0 before / 0.0 after (unchanged)
+Injection observed        : YES
+Non-target unexpectedly overloaded: NO
+Injection activation      : PASS
+Target isolation          : PASS
+Forwarding-policy intact  : PASS
+Comparator isolation      : PASS
+Deterministic replay      : PASS
+Result                    : PASS
+
+------------------------------------------------------------------------
+AHBN
+------------------------------------------------------------------------
+Relevant bottleneck role : static cluster heads used by canonical AHBN
+Expected target           : [0, 1, 2, 3]
+Runtime target            : [0, 1, 2, 3]
+Target-selection basis    : round-robin clusters; lowest node ID per cluster
+Target resolution         : PASS
+
+Before overload (t=0, factor=1.0):
+  Node 0   one-hop delay : 1.127885359692
+  Node 4   one-hop delay : 1.147294242833
+
+After overload (t=0, configured run factor):
+  Node 0   one-hop delay : 3.127885359692
+  Observed added delay    : 2.000000000000
+  Node 4   one-hop delay : 1.147294242833
+  Non-target added delay  : 0.000000000000
+  processing_delay        : 0.0 before / 0.0 after (unchanged)
+Injection observed        : YES
+Non-target unexpectedly overloaded: NO
+Injection activation      : PASS
+Target isolation          : PASS
+Forwarding-policy intact  : PASS
+Comparator isolation      : PASS
+Deterministic replay      : PASS
+Result                    : PASS
+
+========================================================================
+E1 CHECKS
+========================================================================
+Required interpreter                  : PASS
+Frozen four-comparator set            : PASS
+Target resolution                     : PASS
+Configured overload activates         : PASS
+Correct target node(s) affected       : PASS
+Non-target nodes remain normal        : PASS
+No direct forwarding-policy mutation  : PASS
+Comparator isolation                  : PASS
+Deterministic behaviour               : PASS
+
+========================================================================
+E1 RESULT: PASS
+========================================================================
+```
+
+### Result
+
+E1 RESULT: PASS
+
+### Scientific interpretation
+
+E1 confirmed that the Exp08 overload condition is injected into the architecture-specific CH/bottleneck role for Gossip, Structured, DC-SoC, and AHBN; activates at the configured point; affects the intended target rather than unrelated nodes; and does not directly alter the frozen dissemination or controller mechanisms. Gossip remains the intentionally CH-independent reference and therefore has no directly overloaded node.

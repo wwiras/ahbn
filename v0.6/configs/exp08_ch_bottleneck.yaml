@@ -16,9 +16,17 @@ ch_overload_factor: [1.0, 1.5, 2.0, 3.0]
 use_topology_cache: true
 
 strategies:
+  - gossip
   - cluster
   - dcsoc
   - ahbn
+
+# Frozen Stage 3.5 DC-SoC baseline values, made explicit for Exp08.
+dcsoc:
+  eps: 2.0
+  min_samples: 3
+  fanout: 3
+  inter_fanout: 1
 
 ahbn:
   alpha: 0.3

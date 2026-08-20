@@ -922,3 +922,140 @@ Warnings/errors: none.
 E5 RESULT: PASS
 
 Exactly 80 intended AHBN production executions completed, with no additional AHBN simulations. The result matrix, basic numeric integrity, strategy isolation, frozen implementation protection, prior-output preservation, and adaptive trace existence checks all passed. Behavioural interpretation is deferred to E6.
+
+
+## E7 — Aggregate 20 Runs (Mean and 95% CI)
+
+### Scope and inputs
+
+E7 validated and aggregated only the four frozen per-run result files:
+
+- `outputs/csv/exp08_gossip_results_20260820_111017.csv`
+- `outputs/csv/exp08_structured_results_20260820_112714.csv`
+- `outputs/csv/exp08_dcsoc_results_20260820_114555.csv`
+- `outputs/csv/exp08_ahbn_results_20260820_115817.csv`
+
+The Structured comparator retains its canonical stored strategy value, `cluster`. The AHBN adaptive trace was not used or treated as a set of independent statistical samples.
+
+### Method
+
+For every strategy × `ch_overload_factor` condition, each metric was calculated from the 20 independent seed-level observations. The aggregated metrics were `delivery_ratio`, `propagation_delay`, `duplicates`, and `total_forwards`.
+
+The script records `n`, the arithmetic mean, sample standard deviation (`ddof=1`), standard error, and the two-sided Student-t 95% confidence interval:
+
+```text
+SEM = sample_std / sqrt(n)
+95% CI = mean ± t_(0.975, n-1) × SEM
+n = 20; df = 19
+```
+
+No confidence interval was clipped to a metric's natural bounds.
+
+### Exact command
+
+Executed from `/Users/wwiras/Documents/src/AHBNProj/ahbn/v0.6`:
+
+```bash
+/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python scripts/aggregate_exp08_e7.py 2>&1 | tee outputs/logs/exp08_e7_aggregation.log
+```
+
+### Complete terminal output
+
+```text
+E7 Exp08 aggregation
+Input datasets:
+  gossip: outputs/csv/exp08_gossip_results_20260820_111017.csv
+  cluster: outputs/csv/exp08_structured_results_20260820_112714.csv
+  dcsoc: outputs/csv/exp08_dcsoc_results_20260820_114555.csv
+  ahbn: outputs/csv/exp08_ahbn_results_20260820_115817.csv
+
+Compact aggregation table (mean [95% CI]):
+ahbn     overload=1   n=20  delivery_ratio=0.8305 [0.809379, 0.851621]  propagation_delay=10.015 [9.55615, 10.4739]  duplicates=167.1 [162.876, 171.324]  total_forwards=249.15 [242.814, 255.486]
+ahbn     overload=1.5 n=20  delivery_ratio=0.8295 [0.806002, 0.852998]  propagation_delay=9.67072 [9.04412, 10.2973]  duplicates=166.9 [162.2, 171.6]  total_forwards=248.85 [241.801, 255.899]
+ahbn     overload=2   n=20  delivery_ratio=0.837 [0.813917, 0.860083]  propagation_delay=10.5334 [9.48505, 11.5817]  duplicates=168.4 [163.783, 173.017]  total_forwards=251.1 [244.175, 258.025]
+ahbn     overload=3   n=20  delivery_ratio=0.8205 [0.79623, 0.84477]  propagation_delay=9.92877 [9.3517, 10.5058]  duplicates=165.1 [160.246, 169.954]  total_forwards=246.15 [238.869, 253.431]
+cluster  overload=1   n=20  delivery_ratio=1 [1, 1]  propagation_delay=4.49796 [4.45441, 4.54152]  duplicates=99 [99, 99]  total_forwards=198 [198, 198]
+cluster  overload=1.5 n=20  delivery_ratio=1 [1, 1]  propagation_delay=6.02282 [5.98005, 6.0656]  duplicates=99 [99, 99]  total_forwards=198 [198, 198]
+cluster  overload=2   n=20  delivery_ratio=1 [1, 1]  propagation_delay=7.52282 [7.48005, 7.5656]  duplicates=99 [99, 99]  total_forwards=198 [198, 198]
+cluster  overload=3   n=20  delivery_ratio=1 [1, 1]  propagation_delay=10.5228 [10.48, 10.5656]  duplicates=99 [99, 99]  total_forwards=198 [198, 198]
+dcsoc    overload=1   n=20  delivery_ratio=0.827 [0.808772, 0.845228]  propagation_delay=10.1437 [9.46217, 10.8251]  duplicates=166.4 [162.754, 170.046]  total_forwards=248.1 [242.632, 253.568]
+dcsoc    overload=1.5 n=20  delivery_ratio=0.8375 [0.818482, 0.856518]  propagation_delay=10.2838 [9.32741, 11.2401]  duplicates=168.5 [164.696, 172.304]  total_forwards=251.25 [245.544, 256.956]
+dcsoc    overload=2   n=20  delivery_ratio=0.8515 [0.830173, 0.872827]  propagation_delay=10.1711 [9.40893, 10.9333]  duplicates=171.3 [167.035, 175.565]  total_forwards=255.45 [249.052, 261.848]
+dcsoc    overload=3   n=20  delivery_ratio=0.8215 [0.794926, 0.848074]  propagation_delay=10.0069 [9.16294, 10.8508]  duplicates=165.3 [159.985, 170.615]  total_forwards=246.45 [238.478, 254.422]
+gossip   overload=1   n=20  delivery_ratio=0.8305 [0.809379, 0.851621]  propagation_delay=10.015 [9.55615, 10.4739]  duplicates=167.1 [162.876, 171.324]  total_forwards=249.15 [242.814, 255.486]
+gossip   overload=1.5 n=20  delivery_ratio=0.8305 [0.809379, 0.851621]  propagation_delay=10.015 [9.55615, 10.4739]  duplicates=167.1 [162.876, 171.324]  total_forwards=249.15 [242.814, 255.486]
+gossip   overload=2   n=20  delivery_ratio=0.8305 [0.809379, 0.851621]  propagation_delay=10.015 [9.55615, 10.4739]  duplicates=167.1 [162.876, 171.324]  total_forwards=249.15 [242.814, 255.486]
+gossip   overload=3   n=20  delivery_ratio=0.8305 [0.809379, 0.851621]  propagation_delay=10.015 [9.55615, 10.4739]  duplicates=167.1 [162.876, 171.324]  total_forwards=249.15 [242.814, 255.486]
+
+Strategies: 4
+Seeds per condition: 20
+Overload factors: [1.0, 1.5, 2.0, 3.0]
+Expected raw rows: 320
+Validated raw rows: 320
+Expected aggregate conditions: 16
+Generated aggregate conditions: 16
+95% CI method: Student t
+Degrees of freedom per condition: 19
+Metrics aggregated: ['delivery_ratio', 'propagation_delay', 'duplicates', 'total_forwards']
+Saved: outputs/csv/exp08_summary_20260820_123734.csv
+Overall E7: PASS
+```
+
+### Validation and outputs
+
+- Input files existed and each contained exactly 80 result rows.
+- Each input contained only its expected canonical strategy value (`gossip`, `cluster`, `dcsoc`, or `ahbn`).
+- Each strategy contained exactly the seed set 42–61 and exactly the overload-factor set `[1.0, 1.5, 2.0, 3.0]`.
+- Every overload factor had exactly 20 observations, with no duplicate `(seed, ch_overload_factor)` pairs.
+- All four metric columns existed and all aggregated values were numeric and finite.
+- All four strategies shared the same complete 20 × 4 experimental grid.
+- The summary contained exactly 16 expected conditions and every row had `n=20`.
+- All means, sample standard deviations, SEMs, and CI bounds were finite; standard deviations and SEMs were non-negative; every CI contained its mean.
+- No expected condition was missing and no extra condition was present.
+- Frozen input hashes remained unchanged after aggregation.
+
+Output summary: `outputs/csv/exp08_summary_20260820_123734.csv`
+Terminal log: `outputs/logs/exp08_e7_aggregation.log`
+
+### Result
+
+E7 RESULT: PASS
+
+No simulations were run or rerun. The AHBN adaptive trace was not treated as independent statistical samples. Frozen AHBN and comparator implementations, Exp08 configuration, and existing raw result CSVs were unchanged. E8 plotting was not started, and E9 scientific interpretation was not started.
+
+## E8 — Plot Four Algorithms
+
+### Purpose and provenance
+
+E8 created the final descriptive 2 × 2 Exp08 comparison figure for Gossip, Structured, DC-SoC, and AHBN. It plotted the frozen E7 means and already-computed Student-t 95% confidence intervals against CH overload factor. No scientific interpretation was performed.
+
+- E7 status: PASS
+- E7 raw rows previously validated: 320
+- E7 conditions aggregated: 16
+- E7 runs per condition: 20
+- E7 CI method: Student t, df=19
+- Frozen E7 summary CSV used: `outputs/csv/exp08_summary_20260820_123734.csv`
+- E7 terminal log: `outputs/logs/exp08_e7_aggregation.log`
+- E7 aggregation script: `scripts/aggregate_exp08_e7.py`
+- E8 plotting script created: `scripts/plot_exp08_e8.py`
+- Exact Python interpreter: `/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python`
+- Exact execution command: `/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python scripts/plot_exp08_e8.py`
+
+### Validation and outputs
+
+- Summary conditions validated: 16
+- Strategies found: `ahbn`, `cluster`, `dcsoc`, `gossip`; displayed as AHBN, Structured, DC-SoC, and Gossip, respectively
+- Overload factors found: `1.0`, `1.5`, `2.0`, `3.0`
+- Runs per condition found: 20
+- Metrics plotted: `delivery_ratio`, `propagation_delay`, `duplicates`, `total_forwards`
+- Numerical integrity: each metric plotted exactly 16 means and 16 corresponding 95% CIs, each taken directly from one frozen E7 summary row
+- PNG: `outputs/figures/exp08_four_algorithms_e8.png` (300 dpi)
+- PDF: `outputs/figures/exp08_four_algorithms_e8.pdf`
+- Complete terminal log: `outputs/logs/exp08_e8_plotting.log`
+- Existing designated E8 figures replaced: NO; neither output existed before execution
+
+### Result
+
+E8 RESULT: PASS
+
+The frozen E7 summary CSV was the sole numerical plotting input. No raw result CSV or AHBN adaptive trace was used as numerical plotting input. No simulations were rerun, no aggregation was recomputed, and no E7 artifact was modified. No frozen algorithm implementation, AHBN controller logic, DC-SoC implementation, or Exp08 configuration was modified. No scientific interpretation was performed. E9 was not started.

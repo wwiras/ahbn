@@ -18,7 +18,14 @@ num_clusters: 4
 strategies:
   - gossip
   - cluster
+  - dcsoc
   - ahbn
+
+dcsoc:
+  eps: 2.0
+  min_samples: 3
+  fanout: 3
+  inter_fanout: 1
 
 churn_rates:
   - 0.00

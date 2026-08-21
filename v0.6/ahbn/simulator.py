@@ -11,7 +11,12 @@ from ahbn.message import Message
 from ahbn.metrics import MetricsCollector
 from ahbn.node import Node
 from ahbn.strategies.base import ForwardingStrategy
-from ahbn.topology import repair_topology_after_churn
+from ahbn.topology import (
+    recluster_dcsoc,
+    reinstate_dcsoc_as_leaf,
+    repair_dcsoc_after_failure,
+    repair_topology_after_churn,
+)
 from ahbn.utils import AdaptiveTraceRow
 
 
@@ -744,13 +749,15 @@ class Simulator:
         if not node.is_active:
             return
 
+        was_core = node.dcsoc_role == "core"
         node.leave_network()
-
-        repair_topology_after_churn(
-            self.nodes,
-            self.cluster_manager,
-            resource_aware_heads=self.resource_aware_heads,
-        )
+        if self.strategy.__class__.__name__ == "DCSOCStrategy":
+            self.handle_dcsoc_failure(node_id, was_core=was_core)
+        else:
+            repair_topology_after_churn(
+                self.nodes, self.cluster_manager,
+                resource_aware_heads=self.resource_aware_heads,
+            )
 
         self.metrics.record_churn_event("leave")
         self.metrics.record_cluster_repair()
@@ -773,12 +780,30 @@ class Simulator:
             return
 
         node.rejoin_network()
-
-        repair_topology_after_churn(
-            self.nodes,
-            self.cluster_manager,
-            resource_aware_heads=self.resource_aware_heads,
-        )
+        if self.strategy.__class__.__name__ == "DCSOCStrategy":
+            from ahbn.topology import refresh_active_neighbors
+            refresh_active_neighbors(self.nodes)
+            reinstate_dcsoc_as_leaf(self.nodes, self.cluster_manager, node_id)
+            missing = sorted(mid for mid in self.metrics.messages if not node.has_seen(mid))
+            if missing:
+                source_id = next((
+                    nid for nid in sorted(self.nodes)
+                    if self.nodes[nid].is_active
+                    and all(self.nodes[nid].has_seen(mid) for mid in missing)
+                ), None)
+                if source_id is not None:
+                    self.cluster_manager.recovery_count += 1
+                    self.cluster_manager.recovery_request_count += 1
+                    delay = self.base_delay + self.rng.uniform(0.0, self.jitter)
+                    self.schedule_event(
+                        time=now + delay, priority=0, event_type="dcsoc_recovery",
+                        payload={"node_id": node_id, "message_ids": missing, "started_at": now},
+                    )
+        else:
+            repair_topology_after_churn(
+                self.nodes, self.cluster_manager,
+                resource_aware_heads=self.resource_aware_heads,
+            )
 
         self.metrics.record_churn_event("join")
         self.metrics.record_cluster_repair()
@@ -943,3 +968,24 @@ class Simulator:
                         )
                     ),
                 )
+
+            elif event.event_type == "dcsoc_recovery":
+                node = self.nodes[event.payload["node_id"]]
+                if node.is_active:
+                    for message_id in event.payload["message_ids"]:
+                        node.mark_seen(message_id)
+                    self.cluster_manager.recovery_transfer_count += 1
+                    self.cluster_manager.recovery_time += event.time - event.payload["started_at"]
+
+            elif event.event_type == "dcsoc_recluster":
+                recluster_dcsoc(
+                    self.nodes, self.cluster_manager,
+                    eps=float(event.payload.get("eps", 2.0)),
+                    min_samples=int(event.payload.get("min_samples", 3)),
+                )
+    def handle_dcsoc_failure(self, node_id: int, was_core: bool) -> Optional[int]:
+        if self.cluster_manager is None or not hasattr(self.cluster_manager, "structural_edges"):
+            return None
+        return repair_dcsoc_after_failure(
+            self.nodes, self.cluster_manager, node_id, was_core=was_core
+        )

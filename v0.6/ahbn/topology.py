@@ -285,6 +285,117 @@ def repair_topology_after_churn(
 ) -> None:
     refresh_active_neighbors(nodes)
     refresh_cluster_overlay(nodes, cluster_mgr, resource_aware_heads=resource_aware_heads)
+
+
+def _build_dcsoc_structure(nodes: Dict[int, Node], cluster_mgr: ClusterManager) -> None:
+    """Build a deterministic core-rooted dissemination DAG.
+
+    One elected dissemination core represents each retained DBSCAN cluster.
+    Cluster cores form a directed routing chain and every ordinary member is
+    a direct leaf of its core.  This is the documented dissemination-only
+    surrogate for the paper's social/core hierarchy.
+    """
+    for node in nodes.values():
+        node.dcsoc_role = "leaf"
+        node.dcsoc_parent = None
+        node.dcsoc_children = []
+        node.dcsoc_core_neighbors = []
+
+    edges: list[tuple[int, int]] = []
+    cluster_ids = sorted(cluster_mgr.cluster_to_head)
+    for index, cluster_id in enumerate(cluster_ids):
+        core_id = cluster_mgr.cluster_to_head[cluster_id]
+        core = nodes[core_id]
+        core.dcsoc_role = "core"
+        for member_id in sorted(cluster_mgr.cluster_to_members[cluster_id]):
+            if member_id == core_id or not nodes[member_id].is_active:
+                continue
+            nodes[member_id].dcsoc_parent = core_id
+            core.dcsoc_children.append(member_id)
+            edges.append((core_id, member_id))
+        if index:
+            parent_core = cluster_mgr.cluster_to_head[cluster_ids[index - 1]]
+            core.dcsoc_parent = parent_core
+            nodes[parent_core].dcsoc_children.append(core_id)
+            nodes[parent_core].dcsoc_core_neighbors.append(core_id)
+            core.dcsoc_core_neighbors.append(parent_core)
+            edges.append((parent_core, core_id))
+    cluster_mgr.structural_edges = list(dict.fromkeys(edges))
+
+
+def repair_dcsoc_after_failure(
+    nodes: Dict[int, Node], cluster_mgr: ClusterManager, failed_id: int, was_core: bool
+) -> int | None:
+    """Perform a local role/relationship transfer; unrelated edges are kept."""
+    failed = nodes[failed_id]
+    failed.dcsoc_lifecycle = "inactive"
+    old_edges = set(cluster_mgr.structural_edges)
+    affected = {(a, b) for a, b in old_edges if failed_id in (a, b)}
+    cluster_mgr.structural_edges = [edge for edge in cluster_mgr.structural_edges if edge not in affected]
+    parent = failed.dcsoc_parent
+    children = list(failed.dcsoc_children)
+    failed.dcsoc_parent = None
+    failed.dcsoc_children = []
+    replacement = None
+    if was_core and failed.cluster_id is not None:
+        eligible = [
+            nid for nid in cluster_mgr.cluster_to_members.get(failed.cluster_id, [])
+            if nid != failed_id and nodes[nid].is_active
+        ]
+        if eligible:
+            replacement = max(eligible, key=lambda nid: (len(nodes[nid].original_neighbors), -nid))
+            repl = nodes[replacement]
+            repl.dcsoc_role = "core"
+            repl.is_cluster_head = True
+            repl.dcsoc_parent = parent if parent != replacement else None
+            inherited = [cid for cid in children if cid != replacement and nodes[cid].is_active]
+            repl.dcsoc_children = list(dict.fromkeys(repl.dcsoc_children + inherited))
+            if parent is not None and nodes[parent].is_active and parent != replacement:
+                nodes[parent].dcsoc_children = [replacement if x == failed_id else x for x in nodes[parent].dcsoc_children]
+                cluster_mgr.structural_edges.append((parent, replacement))
+            for child_id in inherited:
+                nodes[child_id].dcsoc_parent = replacement
+                cluster_mgr.structural_edges.append((replacement, child_id))
+            cluster_mgr.cluster_to_head[failed.cluster_id] = replacement
+            cluster_mgr.core_replacement_count += 1
+        failed.is_cluster_head = False
+        failed.dcsoc_role = "leaf"
+    cluster_mgr.structural_edges = list(dict.fromkeys(cluster_mgr.structural_edges))
+    changed = len(old_edges.symmetric_difference(set(cluster_mgr.structural_edges)))
+    cluster_mgr.structural_repair_count += 1
+    cluster_mgr.topology_edges_changed += changed
+    cluster_mgr.repair_control_events += max(1, len(affected))
+    return replacement
+
+
+def reinstate_dcsoc_as_leaf(nodes: Dict[int, Node], cluster_mgr: ClusterManager, node_id: int) -> None:
+    node = nodes[node_id]
+    node.dcsoc_lifecycle = "returned"
+    node.dcsoc_role = "leaf"
+    node.is_cluster_head = False
+    core_id = cluster_mgr.cluster_to_head.get(node.cluster_id)
+    node.dcsoc_parent = core_id if core_id != node_id else None
+    node.dcsoc_children = []
+    if core_id is not None and core_id != node_id:
+        nodes[core_id].dcsoc_children = list(dict.fromkeys(nodes[core_id].dcsoc_children + [node_id]))
+        edge = (core_id, node_id)
+        if edge not in cluster_mgr.structural_edges:
+            cluster_mgr.structural_edges.append(edge)
+            cluster_mgr.topology_edges_changed += 1
+
+
+def recluster_dcsoc(nodes: Dict[int, Node], cluster_mgr: ClusterManager, eps: float, min_samples: int) -> ClusterManager:
+    """Regenerate from current online physical state at an explicit du boundary."""
+    active = {nid: node for nid, node in nodes.items() if node.is_active}
+    before = set(cluster_mgr.structural_edges)
+    new = assign_dcsoc_clusters(active, eps=eps, min_samples=min_samples)
+    cluster_mgr.cluster_to_members = new.cluster_to_members
+    cluster_mgr.cluster_to_head = new.cluster_to_head
+    cluster_mgr.structural_edges = new.structural_edges
+    cluster_mgr.structural_generation += 1
+    cluster_mgr.recluster_count += 1
+    cluster_mgr.topology_edges_changed += len(before.symmetric_difference(set(new.structural_edges)))
+    return cluster_mgr
     
 def assign_dcsoc_clusters(
         nodes: Dict[int, Node],
@@ -316,6 +427,9 @@ def assign_dcsoc_clusters(
         node.cluster_id = None
         node.is_cluster_head = False
         node.gateway_neighbors = []
+        node.dcsoc_parent = None
+        node.dcsoc_children = []
+        node.dcsoc_core_neighbors = []
 
     # ------------------------------------------------------------
     # Reconstruct the original physical graph.
@@ -517,4 +631,6 @@ def assign_dcsoc_clusters(
         nodes[left].gateway_neighbors.append(right)
         nodes[right].gateway_neighbors.append(left)
 
+    cluster_mgr.initial_clustering_count = 1
+    _build_dcsoc_structure(nodes, cluster_mgr)
     return cluster_mgr

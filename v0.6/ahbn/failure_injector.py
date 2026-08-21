@@ -65,7 +65,10 @@ class FailureInjector:
         elif mode == "ch_failure":
             node_id = self._pick_random_cluster_head(simulator)
             if node_id is not None:
+                was_core = simulator.nodes[node_id].is_cluster_head
                 simulator.nodes[node_id].fail()
+                if hasattr(simulator, "handle_dcsoc_failure"):
+                    simulator.handle_dcsoc_failure(node_id, was_core=was_core)
                 self.failed_node_id = node_id
                 self.failure_mode_applied = mode
 

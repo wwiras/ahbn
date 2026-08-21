@@ -89,6 +89,13 @@ class Node:
         default_factory=list
     )
 
+    # DC-SoC dissemination overlay (independent of AHBN control state).
+    dcsoc_role: str = "leaf"
+    dcsoc_parent: Optional[int] = None
+    dcsoc_children: List[int] = field(default_factory=list)
+    dcsoc_core_neighbors: List[int] = field(default_factory=list)
+    dcsoc_lifecycle: str = "active"
+
     # --------------------------------------------------------
     # Message state
     # --------------------------------------------------------

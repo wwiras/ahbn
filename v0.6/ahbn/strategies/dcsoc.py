@@ -114,6 +114,25 @@ class DCSOCStrategy(ForwardingStrategy):
         if node.cluster_id is None:
             return []
 
+        # Faithful S2 structural push: an ordinary member may only uplink
+        # toward its assigned core.  It never expands the payload to an
+        # independently sampled set of physical neighbours.
+        if getattr(node, "dcsoc_role", "leaf") == "leaf":
+            parent = getattr(node, "dcsoc_parent", None)
+            if parent is None or parent not in simulator.nodes:
+                return []
+            return [parent] if simulator.nodes[parent].is_active else []
+
+        # Core/routing nodes drive propagation down the explicit DAG.  The
+        # existing fixed fanout remains a total resource bound.
+        structural_children = [
+            child_id
+            for child_id in getattr(node, "dcsoc_children", [])
+            if child_id in simulator.nodes and simulator.nodes[child_id].is_active
+        ]
+        if structural_children:
+            return structural_children[: self.fanout]
+
         # ----------------------------------------------------
         # Intra-cluster Gossip candidates.
         #

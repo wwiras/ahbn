@@ -76,10 +76,13 @@ def build_simulation_from_config(cfg: dict, strategy_name: str):
     cluster_manager = None
     controller = None
     ch_overload_factor = cfg.get("ch_overload_factor", 1.0)
+    fulfill_all_obligations = cfg.get("experiment", "") in {"exp08", "exp09"}
 
     if strategy_name == "gossip":
         fanout = cfg.get("fanout", 3)
-        strategy = GossipStrategy(fanout=fanout)
+        strategy = GossipStrategy(
+            fanout=None if fulfill_all_obligations else fanout
+        )
 
     elif strategy_name == "cluster":
         num_clusters = cfg.get("num_clusters", 4)
@@ -151,6 +154,7 @@ def build_simulation_from_config(cfg: dict, strategy_name: str):
                     1,
                 )
             ),
+            fulfill_all_structural_children=fulfill_all_obligations,
         )
 
     else:

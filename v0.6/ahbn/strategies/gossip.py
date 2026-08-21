@@ -19,8 +19,8 @@ class GossipStrategy(ForwardingStrategy):
     AHBN may update `fanout` before calling this strategy.
     """
 
-    def __init__(self, fanout: int = 3) -> None:
-        if fanout < 1:
+    def __init__(self, fanout: int | None = 3) -> None:
+        if fanout is not None and fanout < 1:
             raise ValueError("fanout must be >= 1")
 
         self.fanout = fanout
@@ -45,6 +45,9 @@ class GossipStrategy(ForwardingStrategy):
 
         if not candidates:
             return []
+
+        if self.fanout is None:
+            return candidates
 
         k = min(
             int(self.fanout),

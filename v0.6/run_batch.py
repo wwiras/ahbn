@@ -89,6 +89,7 @@ def run_single(
     nodes = build_nodes_from_graph(graph)
 
     experiment_name = cfg.get("experiment", "")
+    fulfill_all_obligations = experiment_name in {"exp08", "exp09"}
     if experiment_name == "exp12":
         assign_mixed_resources(nodes, cfg, seed=seed, scenario_name=resource_scenario)
 
@@ -96,7 +97,13 @@ def run_single(
     controller = None
 
     if strategy_name == "gossip":
-        strategy = GossipStrategy(fanout=fanout if fanout is not None else 3)
+        strategy = GossipStrategy(
+            fanout=(
+                None
+                if fulfill_all_obligations
+                else (fanout if fanout is not None else 3)
+            )
+        )
 
     elif strategy_name == "cluster":
         cluster_manager = assign_static_clusters(
@@ -170,6 +177,7 @@ def run_single(
                     1,
                 )
             ),
+            fulfill_all_structural_children=fulfill_all_obligations,
         )
 
     else:
@@ -451,7 +459,7 @@ def exp09(cfg: dict) -> tuple[list[ResultRow], list]:
                         num_nodes=num_nodes,
                         topology_type="er",
                         topology_param=edge_prob,
-                        fanout=fanout if strategy_name != "cluster" else None,
+                        fanout=None,
                         num_clusters=num_clusters,
                         ch_overload_factor=None,
                         delivery_ratio=summary["delivery_ratio"],

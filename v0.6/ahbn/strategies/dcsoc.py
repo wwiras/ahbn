@@ -42,6 +42,7 @@ class DCSOCStrategy(ForwardingStrategy):
         self,
         fanout: int = 3,
         inter_fanout: int = 1,
+        fulfill_all_structural_children: bool = False,
     ) -> None:
 
         if fanout < 1:
@@ -60,6 +61,10 @@ class DCSOCStrategy(ForwardingStrategy):
 
         self.inter_fanout = int(
             inter_fanout
+        )
+
+        self.fulfill_all_structural_children = bool(
+            fulfill_all_structural_children
         )
 
     # --------------------------------------------------------
@@ -131,6 +136,8 @@ class DCSOCStrategy(ForwardingStrategy):
             if child_id in simulator.nodes and simulator.nodes[child_id].is_active
         ]
         if structural_children:
+            if self.fulfill_all_structural_children:
+                return structural_children
             return structural_children[: self.fanout]
 
         # ----------------------------------------------------

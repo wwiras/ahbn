@@ -151,9 +151,21 @@ def main() -> None:
         point_counts == {metric: 16 for metric in METRICS},
         f"plotted-point integrity failure: {point_counts}",
     )
+    # Reserve a dedicated header band: title above, shared legend below.  Keeping
+    # both outside the axes prevents overlap in both raster and PDF backends.
+    fig.get_layout_engine().set(rect=(0.0, 0.0, 1.0, 0.88))
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside upper center", ncols=4, frameon=False)
-    fig.suptitle("Exp08: Four-algorithm comparison", fontsize=14)
+    fig.suptitle("Exp08: Four-algorithm comparison", fontsize=14, y=0.985)
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.945),
+        ncols=4,
+        frameon=False,
+        columnspacing=1.8,
+        handletextpad=0.7,
+    )
     OUTPUT_PNG.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUTPUT_PNG, dpi=300, bbox_inches="tight")
     fig.savefig(OUTPUT_PDF, bbox_inches="tight")

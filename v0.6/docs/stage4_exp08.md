@@ -1,5 +1,20 @@
 # Stage 4 — Exp08 CH Overload
 
+## Experiment checklist
+
+- [x] **E0 — Configuration inspection/freeze:** PASS after the documented E0.1 minimal configuration reconciliation
+- [x] **E1 — Validate CH-overload injection:** PASS
+- [x] **E2 — Run Gossip:** PASS
+- [x] **E3 — Run Structured:** PASS
+- [x] **E4 — Run DC-SoC:** PASS; the pre-execution diagnostic deviation is documented and excluded from the official dataset
+- [x] **E5 — Run AHBN:** PASS
+- [x] **E6 — Validate AHBN adaptive traces:** PASS
+- [x] **E7 — Aggregate 20 runs (mean and 95% CI):** PASS
+- [x] **E8 — Plot four algorithms:** PASS
+- [x] **E9 — Scientific interpretation:** PASS
+
+**Exp08 final status: COMPLETE — E0 through E9 PASS.** Exp09 was not started.
+
 ## E0 — Configuration Inspection / Freeze
 
 ### Purpose
@@ -1059,3 +1074,61 @@ E8 created the final descriptive 2 × 2 Exp08 comparison figure for Gossip, Stru
 E8 RESULT: PASS
 
 The frozen E7 summary CSV was the sole numerical plotting input. No raw result CSV or AHBN adaptive trace was used as numerical plotting input. No simulations were rerun, no aggregation was recomputed, and no E7 artifact was modified. No frozen algorithm implementation, AHBN controller logic, DC-SoC implementation, or Exp08 configuration was modified. No scientific interpretation was performed. E9 was not started.
+
+## E9 — Scientific Interpretation
+
+This section incorporates the complete E9 scientific interpretation and is the single canonical Exp08 record. No separate E9 interpretation artifact is required.
+
+### 1. Overall Finding
+
+Within the frozen Exp08 setting, increasing CH overload primarily exposed a latency cost in the strongly CH-dependent Structured strategy rather than a delivery failure. Structured maintained a delivery-ratio mean of 1.000 at every overload factor, with 99 duplicate messages and 198 total forwards, while its mean propagation delay rose monotonically from 4.498 s to 10.523 s. Gossip was unchanged across overload factors because its architecture assigns no CH role and therefore had no direct CH-overload target. DC-SoC and AHBN showed non-monotonic, comparatively small changes in all four aggregate metrics; their means remained close to the Gossip operating point. Thus, Exp08 reveals a reliability-latency-overhead trade-off, not universal superiority by one adaptive method.
+
+### 2. Delivery Ratio
+
+The E7 mean sequences at overload factors 1.0, 1.5, 2.0, and 3.0 were: Gossip 0.8305, 0.8305, 0.8305, 0.8305 (95% CI [0.8094, 0.8516] throughout); Structured 1.000 at every factor (95% CI [1.000, 1.000]); DC-SoC 0.8270, 0.8375, 0.8515, 0.8215 (CIs [0.8088, 0.8452], [0.8185, 0.8565], [0.8302, 0.8728], [0.7949, 0.8481]); and AHBN 0.8305, 0.8295, 0.8370, 0.8205 (CIs [0.8094, 0.8516], [0.8060, 0.8530], [0.8139, 0.8601], [0.7962, 0.8448]).
+
+Structured maintained delivery best and exhibited no degradation. Gossip was stable at a lower mean. DC-SoC and AHBN did not degrade monotonically: both increased modestly through factor 2.0 and then fell at factor 3.0. From factor 1.0 to 3.0, the simple descriptive changes were -0.0055 for DC-SoC and -0.0100 for AHBN. DC-SoC exceeded AHBN at factor 2.0 (0.8515 versus 0.8370); at factor 3.0 they were nearly equal (0.8215 and 0.8205), and both were below Gossip (0.8305). The evidence does not support claiming that AHBN delivered better than every comparator.
+
+### 3. Propagation Delay
+
+Mean delay sequences were 10.015 s throughout for Gossip; 4.498, 6.023, 7.523, and 10.523 s for Structured; 10.144, 10.284, 10.171, and 10.007 s for DC-SoC; and 10.015, 9.671, 10.533, and 9.929 s for AHBN. Structured showed the clearest CH-bottleneck sensitivity, increasing by 6.025 s from factor 1.0 to 3.0 while preserving perfect delivery. Its 95% CIs were [4.454, 4.542] s at factor 1.0 and [10.480, 10.566] s at factor 3.0.
+
+Gossip was invariant because it had no CH target. DC-SoC remained close to 10 s, and AHBN fluctuated around the same level, peaking at factor 2.0 (10.533 s; CI [9.485, 11.582]) rather than factor 3.0. At factor 3.0, Structured had the largest mean delay (10.523 s), followed by Gossip (10.015 s), DC-SoC (10.007 s), and AHBN (9.929 s). These mean rankings are descriptive, not formal pairwise significance results. Structured's full delivery therefore carried an increasing latency cost under CH overload.
+
+### 4. Duplicate Messages
+
+Structured produced 99 duplicates at every factor, substantially fewer than the other strategies. Gossip produced 167.1 throughout. DC-SoC means were 166.4, 168.5, 171.3, and 165.3; AHBN means were 167.1, 166.9, 168.4, and 165.1. The corresponding 95% CIs for DC-SoC ranged from [162.8, 170.0] at factor 1.0 to [160.0, 170.6] at factor 3.0; AHBN ranged from [162.9, 171.3] to [160.2, 170.0]. Increased overload did not produce a monotonic redundancy increase: DC-SoC and AHBN peaked at factor 2.0 and declined at factor 3.0.
+
+Fewer duplicates did not imply a reliability penalty here: Structured combined the lowest duplicate count with perfect delivery. Its observed cost instead appeared in delay. Conversely, the additional redundancy of Gossip, DC-SoC, and AHBN did not yield Structured-level delivery.
+
+### 5. Total Forwards
+
+Structured used 198 forwards at every factor, versus 249.15 for Gossip throughout. DC-SoC means were 248.10, 251.25, 255.45, and 246.45; AHBN means were 249.15, 248.85, 251.10, and 246.15. At factor 3.0, the 95% CIs were [238.48, 254.42] for DC-SoC and [238.87, 253.43] for AHBN. DC-SoC and AHBN rose to factor 2.0 and then declined rather than increasing monotonically.
+
+Structured was most communication-efficient by both overhead metrics and delivered every node. Gossip, DC-SoC, and AHBN used approximately 48–57 more forwards per run without achieving higher delivery. High forwarding cost therefore did not purchase the highest reliability in this setting. Structured's efficiency was accompanied by increasing latency sensitivity rather than delivery degradation.
+
+### 6. Cross-Algorithm Trade-Off
+
+Numerically, Structured occupied the strongest reliability/overhead point—delivery 1.000, 99 duplicates, and 198 forwards—but its delay increased from 4.498 s to 10.523 s. This is consistent with, but does not prove, accumulation of injected latency along mandatory structured/CH paths. Gossip's constant metrics are consistent with decentralized static dissemination and the absence of a CH-overload target; this is architecture-specific immunity to this injection, not independence from every overload form.
+
+DC-SoC's fixed DBSCAN clustering, fixed CH selection, fanout 3, inter-fanout 1, and structurally determined forwarding produced stable delay but no clear reliability or overhead advantage over Gossip and AHBN. DC-SoC is not adaptive. AHBN remained near the Gossip/DC-SoC performance band. Its aggregate outcomes do not show a decisive external advantage, although E6 demonstrates internal adaptive activity.
+
+### 7. AHBN Adaptive Behaviour
+
+E6 validated 19,985 trace rows across all 80 AHBN runs. Runtime latency and utilization observations were finite, non-constant, and varied across overload conditions. The controller made 4,831 dissemination-mode transitions; all 80/80 runs contained transitions; and there were zero controller-decision consistency mismatches.
+
+Runtime fanout remained exactly 3 in every trace row, with zero fanout transitions, within the frozen [2,4] bounds. Exp08 therefore demonstrates mode adaptation, not fanout adaptation. AHBN's external behaviour may cautiously be related to switching dissemination modes in response to local observations, but E7 shows only that AHBN remained broadly comparable to Gossip and DC-SoC. It does not establish causation or universal superiority.
+
+### 8. Limitations and Caution
+
+Exp08 tests one CH-overload scenario, topology/workload configuration, and set of frozen implementations and parameters. Overload targets are architecture-specific: Structured, DC-SoC, and AHBN receive added delay at their respective CH roles, whereas Gossip constructs no CH and has no direct target. Each condition contains 20 seed-level runs. Student-t 95% confidence intervals quantify uncertainty around sample means but are not formal pairwise significance tests. The experiment does not isolate the causal contribution of AHBN mode switching, and conclusions apply only to the frozen implementations and parameterization used here.
+
+### 9. Final Exp08 Takeaway
+
+Exp08 indicates that CH overload need not reduce delivery when a dissemination structure preserves reachability, but it can shift cost into propagation delay. Structured maintained complete delivery with the lowest duplicate and forwarding counts, while its mean delay rose from 4.498 s to 10.523 s. Gossip was invariant because it had no CH-overload target, and fixed DC-SoC and adaptive AHBN remained near the same lower-delivery, higher-overhead operating band. AHBN demonstrably adapted through dissemination-mode switching in every run, with fanout fixed at 3, but Exp08 does not show universal performance superiority; it supports a conservative claim of internally responsive mode adaptation with external performance broadly comparable to Gossip and DC-SoC under the frozen conditions.
+
+### Result
+
+E9 RESULT: PASS
+
+No simulations were rerun, no aggregation or confidence intervals were recomputed, and no raw result, E7 summary, E8 numerical result, frozen implementation, controller logic, or Exp08 configuration was modified. The E9 interpretation was consolidated into this document without changing its scientific conclusions. Exp09 was not started.

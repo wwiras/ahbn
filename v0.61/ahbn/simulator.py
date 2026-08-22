@@ -11,6 +11,7 @@ from ahbn.message import Message
 from ahbn.metrics import MetricsCollector
 from ahbn.node import Node
 from ahbn.strategies.base import ForwardingStrategy
+from ahbn.strategies.gossip import GossipStrategy
 from ahbn.topology import (
     recluster_dcsoc,
     reinstate_dcsoc_as_leaf,
@@ -713,6 +714,15 @@ class Simulator:
                 message,
                 self,
                 sender_id=src_id,
+            )
+        elif isinstance(self.strategy, GossipStrategy):
+            # Standalone Gossip excludes the immediate sender before applying
+            # either its Exp07 fanout or its normal all-neighbor semantics.
+            targets = self.strategy.select_targets(
+                node,
+                message,
+                self,
+                exclude_target_id=src_id,
             )
         else:
             targets = self.strategy.select_targets(

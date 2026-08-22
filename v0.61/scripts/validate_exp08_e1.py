@@ -131,7 +131,7 @@ def probe_delays(sim: Simulator) -> dict[int, float]:
 
 def comparator_freeze(cfg: dict, name: str, sim: Simulator) -> bool:
     if name == "gossip":
-        return isinstance(sim.strategy, GossipStrategy) and sim.strategy.fanout == 3 and sim.controller is None
+        return isinstance(sim.strategy, GossipStrategy) and sim.strategy.fanout is None and sim.controller is None
     if name == "cluster":
         return isinstance(sim.strategy, ClusterStrategy) and sim.strategy.fanout is None and sim.controller is None
     if name == "dcsoc":

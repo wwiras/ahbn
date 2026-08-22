@@ -96,7 +96,7 @@ def run_single(
     controller = None
 
     if strategy_name == "gossip":
-        strategy = GossipStrategy(fanout=fanout if fanout is not None else 3)
+        strategy = GossipStrategy(fanout=fanout)
 
     elif strategy_name == "cluster":
         cluster_manager = assign_static_clusters(
@@ -413,7 +413,6 @@ def exp09(cfg: dict) -> tuple[list[ResultRow], list]:
     base_delay = cfg.get("base_delay", 1.0)
     jitter = cfg.get("jitter", 0.2)
     source_id = cfg.get("message_source", 0)
-    fanout = cfg.get("fanout", 3)
     num_clusters = cfg.get("num_clusters", 4)
 
     if topology_type != "er":
@@ -437,7 +436,7 @@ def exp09(cfg: dict) -> tuple[list[ResultRow], list]:
                     base_delay=base_delay,
                     jitter=jitter,
                     message_source=source_id,
-                    fanout=fanout,
+                    fanout=None,
                     num_clusters=num_clusters,
                     edge_prob=edge_prob,
                     enable_adaptive_trace=(strategy_name == "ahbn"),
@@ -451,7 +450,7 @@ def exp09(cfg: dict) -> tuple[list[ResultRow], list]:
                         num_nodes=num_nodes,
                         topology_type="er",
                         topology_param=edge_prob,
-                        fanout=fanout if strategy_name != "cluster" else None,
+                        fanout=None,
                         num_clusters=num_clusters,
                         ch_overload_factor=None,
                         delivery_ratio=summary["delivery_ratio"],

@@ -6,7 +6,6 @@ num_nodes: 100
 topology_type: er
 edge_probs: [0.04, 0.06, 0.08, 0.10, 0.12]
 
-fanout: 4
 num_clusters: 4
 
 base_delay: 1.0
@@ -20,8 +19,7 @@ strategies:
   - dcsoc
   - ahbn
 
-# Frozen S2 DC-SoC comparator parameters.  These are explicit because the
-# Exp09 global fanout=4 is the fixed Gossip condition, not a DC-SoC override.
+# Frozen S2 DC-SoC comparator parameters. These do not constrain Gossip.
 dcsoc:
   eps: 2.0
   min_samples: 3

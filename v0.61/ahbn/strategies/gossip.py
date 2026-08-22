@@ -13,14 +13,13 @@ class GossipStrategy(ForwardingStrategy):
 
     The strategy performs no adaptive decision-making.
 
-    Responsibility:
-        Randomly select up to `fanout` active physical neighbors.
-
-    AHBN may update `fanout` before calling this strategy.
+    A configured ``fanout`` bounds random forwarding (the Exp07 sweep).
+    With ``fanout=None``, Gossip forwards to every eligible active physical
+    neighbor (the normal Exp08/Exp09 comparator semantics).
     """
 
-    def __init__(self, fanout: int = 3) -> None:
-        if fanout < 1:
+    def __init__(self, fanout: Optional[int] = None) -> None:
+        if fanout is not None and fanout < 1:
             raise ValueError("fanout must be >= 1")
 
         self.fanout = fanout
@@ -33,7 +32,7 @@ class GossipStrategy(ForwardingStrategy):
         exclude_target_id: Optional[int] = None,
     ) -> List[int]:
         """
-        Select up to `fanout` active neighbors uniformly at random.
+        Select all eligible neighbors, or sample up to a configured fanout.
         """
 
         candidates = [
@@ -48,10 +47,10 @@ class GossipStrategy(ForwardingStrategy):
         if not candidates:
             return []
 
-        k = min(
-            int(self.fanout),
-            len(candidates),
-        )
+        if self.fanout is None:
+            return candidates
+
+        k = min(int(self.fanout), len(candidates))
 
         return simulator.rng.sample(
             candidates,

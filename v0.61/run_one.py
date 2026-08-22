@@ -78,8 +78,7 @@ def build_simulation_from_config(cfg: dict, strategy_name: str):
     ch_overload_factor = cfg.get("ch_overload_factor", 1.0)
 
     if strategy_name == "gossip":
-        fanout = cfg.get("fanout", 3)
-        strategy = GossipStrategy(fanout=fanout)
+        strategy = GossipStrategy(fanout=cfg.get("fanout"))
 
     elif strategy_name == "cluster":
         num_clusters = cfg.get("num_clusters", 4)

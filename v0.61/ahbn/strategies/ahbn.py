@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from ahbn.message import Message
 from ahbn.node import Node
@@ -63,13 +63,13 @@ class AHBNStrategy(ForwardingStrategy):
 
         if self.adaptive_fanout:
             return max(
-                1,
-                int(node.control.fanout),
+                2,
+                min(4, int(node.control.fanout)),
             )
 
         return max(
-            1,
-            int(self.default_fanout),
+            2,
+            min(4, int(self.default_fanout)),
         )
 
     # --------------------------------------------------------
@@ -101,6 +101,7 @@ class AHBNStrategy(ForwardingStrategy):
         node: Node,
         message: Message,
         simulator,
+        sender_id: Optional[int] = None,
     ) -> List[int]:
 
         fanout = self._get_effective_fanout(node)
@@ -119,6 +120,7 @@ class AHBNStrategy(ForwardingStrategy):
                 node,
                 message,
                 simulator,
+                exclude_target_id=sender_id,
             )
 
         elif mode == "cluster":
@@ -129,6 +131,7 @@ class AHBNStrategy(ForwardingStrategy):
                 node,
                 message,
                 simulator,
+                exclude_target_id=sender_id,
             )
 
         else:

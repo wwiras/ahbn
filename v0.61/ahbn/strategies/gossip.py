@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from ahbn.message import Message
 from ahbn.node import Node
@@ -30,6 +30,7 @@ class GossipStrategy(ForwardingStrategy):
         node: Node,
         message: Message,
         simulator,
+        exclude_target_id: Optional[int] = None,
     ) -> List[int]:
         """
         Select up to `fanout` active neighbors uniformly at random.
@@ -39,6 +40,7 @@ class GossipStrategy(ForwardingStrategy):
             nbr_id
             for nbr_id in node.neighbors
             if nbr_id != node.node_id
+            and nbr_id != exclude_target_id
             and nbr_id in simulator.nodes
             and simulator.nodes[nbr_id].is_active
         ]

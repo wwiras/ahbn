@@ -70,6 +70,7 @@ class ClusterStrategy(ForwardingStrategy):
         self,
         node: Node,
         simulator,
+        exclude_target_id: Optional[int] = None,
     ) -> List[int]:
         """
         Select structured targets for a cluster head.
@@ -99,12 +100,14 @@ class ClusterStrategy(ForwardingStrategy):
                 member_id,
                 simulator,
             )
+            and member_id != exclude_target_id
         ]
 
         gateways = [
             gateway_id
             for gateway_id in node.gateway_neighbors
             if gateway_id != node.node_id
+            and gateway_id != exclude_target_id
             and self._is_active_target(
                 gateway_id,
                 simulator,
@@ -173,6 +176,7 @@ class ClusterStrategy(ForwardingStrategy):
         self,
         node: Node,
         simulator,
+        exclude_target_id: Optional[int] = None,
     ) -> List[int]:
         """
         A normal cluster member forwards only toward its
@@ -193,6 +197,9 @@ class ClusterStrategy(ForwardingStrategy):
         if ch_id == node.node_id:
             return []
 
+        if ch_id == exclude_target_id:
+            return []
+
         if not self._is_active_target(
             ch_id,
             simulator,
@@ -210,6 +217,7 @@ class ClusterStrategy(ForwardingStrategy):
         node: Node,
         message: Message,
         simulator,
+        exclude_target_id: Optional[int] = None,
     ) -> List[int]:
 
         cluster_mgr = simulator.cluster_manager
@@ -221,9 +229,11 @@ class ClusterStrategy(ForwardingStrategy):
             return self._select_head_targets(
                 node,
                 simulator,
+                exclude_target_id=exclude_target_id,
             )
 
         return self._select_member_targets(
             node,
             simulator,
+            exclude_target_id=exclude_target_id,
         )

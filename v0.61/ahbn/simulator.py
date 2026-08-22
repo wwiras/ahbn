@@ -704,11 +704,22 @@ class Simulator:
         # ------------------------------------------------------------
         # Execute selected dissemination strategy
         # ------------------------------------------------------------
-        targets = self.strategy.select_targets(
-            node,
-            message,
-            self,
-        )
+        if self.controller is not None:
+            # Canonical AHBN excludes the immediate sender before applying
+            # its forwarding budget.  Comparator strategies never receive
+            # this AHBN-only argument because they have no controller.
+            targets = self.strategy.select_targets(
+                node,
+                message,
+                self,
+                sender_id=src_id,
+            )
+        else:
+            targets = self.strategy.select_targets(
+                node,
+                message,
+                self,
+            )
 
         unique_targets = [
             target

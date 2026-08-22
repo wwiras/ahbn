@@ -139,7 +139,7 @@ class Simulator:
             self.strategy_name == "dcsoc"
             and self.experiment_name == "exp08"
         ):
-            apply_ch_overload = dst.node_id == self.dcsoc_overload_target_id
+            apply_ch_overload = src.node_id == self.dcsoc_overload_target_id
         else:
             apply_ch_overload = dst.is_cluster_head
 

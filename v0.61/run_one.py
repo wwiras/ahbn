@@ -134,23 +134,7 @@ def build_simulation_from_config(cfg: dict, strategy_name: str):
             ),
         )
 
-        strategy = DCSOCStrategy(
-            fanout=int(
-                dcsoc_cfg.get(
-                    "fanout",
-                    cfg.get(
-                        "fanout",
-                        3,
-                    ),
-                )
-            ),
-            inter_fanout=int(
-                dcsoc_cfg.get(
-                    "inter_fanout",
-                    1,
-                )
-            ),
-        )
+        strategy = DCSOCStrategy()
 
     else:
         raise ValueError(

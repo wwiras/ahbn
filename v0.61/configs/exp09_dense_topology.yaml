@@ -1,6 +1,6 @@
 experiment: exp09
 seed: 42
-runs_per_setting: 30
+runs_per_setting: 20
 
 num_nodes: 100
 topology_type: er

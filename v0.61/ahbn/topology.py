@@ -323,6 +323,25 @@ def _build_dcsoc_structure(nodes: Dict[int, Node], cluster_mgr: ClusterManager) 
     cluster_mgr.structural_edges = list(dict.fromkeys(edges))
 
 
+def get_dcsoc_master(nodes: Dict[int, Node]) -> int:
+    """Return the unique active root core of the DC-SoC structural DAG."""
+    roots = sorted(
+        node.node_id
+        for node in nodes.values()
+        if (
+            node.is_active
+            and node.dcsoc_role == "core"
+            and node.dcsoc_parent is None
+        )
+    )
+    if len(roots) != 1:
+        raise ValueError(
+            "DC-SoC structure must have exactly one active Master/root; "
+            f"found {roots}"
+        )
+    return roots[0]
+
+
 def repair_dcsoc_after_failure(
     nodes: Dict[int, Node], cluster_mgr: ClusterManager, failed_id: int, was_core: bool
 ) -> int | None:

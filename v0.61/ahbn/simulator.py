@@ -12,6 +12,7 @@ from ahbn.metrics import MetricsCollector
 from ahbn.node import Node
 from ahbn.strategies.base import ForwardingStrategy
 from ahbn.strategies.cluster import ClusterStrategy
+from ahbn.strategies.dcsoc import DCSOCStrategy
 from ahbn.strategies.gossip import GossipStrategy
 from ahbn.topology import (
     recluster_dcsoc,
@@ -69,6 +70,7 @@ class Simulator:
         self.cluster_manager = cluster_manager
         self.controller = controller
         self.ch_overload_factor = ch_overload_factor
+        self.dcsoc_overload_target_id: Optional[int] = None
         self.failure_injector = failure_injector
         self.message_source_id: Optional[int] = None
         self.churn_manager = churn_manager
@@ -133,7 +135,15 @@ class Simulator:
         extra = 0.0
 
         # Structured bottleneck pressure.
-        if dst.is_cluster_head:
+        if (
+            self.strategy_name == "dcsoc"
+            and self.experiment_name == "exp08"
+        ):
+            apply_ch_overload = dst.node_id == self.dcsoc_overload_target_id
+        else:
+            apply_ch_overload = dst.is_cluster_head
+
+        if apply_ch_overload:
             extra += self.base_delay * max(
                 0.0,
                 self.ch_overload_factor - 1.0,
@@ -728,6 +738,15 @@ class Simulator:
         elif isinstance(self.strategy, ClusterStrategy):
             # Standalone Structured excludes the immediate sender while
             # preserving every other eligible member/gateway obligation.
+            targets = self.strategy.select_targets(
+                node,
+                message,
+                self,
+                exclude_target_id=src_id,
+            )
+        elif isinstance(self.strategy, DCSOCStrategy):
+            # DC-SoC excludes the immediate sender while preserving every
+            # remaining structural forwarding obligation.
             targets = self.strategy.select_targets(
                 node,
                 message,

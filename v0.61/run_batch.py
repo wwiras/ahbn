@@ -17,6 +17,7 @@ from ahbn.topology import (
     assign_mixed_resources,
     assign_static_clusters,
     build_nodes_from_graph,
+    get_dcsoc_master,
     get_or_build_topology,
 )
 from ahbn.utils import ResultRow, save_results_csv, save_adaptive_trace_csv
@@ -153,24 +154,7 @@ def run_single(
             ),
         )
 
-        strategy = DCSOCStrategy(
-            fanout=int(
-                dcsoc_cfg.get(
-                    "fanout",
-                    (
-                        fanout
-                        if fanout is not None
-                        else 3
-                    ),
-                )
-            ),
-            inter_fanout=int(
-                dcsoc_cfg.get(
-                    "inter_fanout",
-                    1,
-                )
-            ),
-        )
+        strategy = DCSOCStrategy()
 
     else:
         raise ValueError(
@@ -217,10 +201,29 @@ def run_single(
         resource_aware_heads=False,
     )
 
-    sim.inject_message(source_id=message_source, message_id="m1")
+    effective_source = message_source
+    dcsoc_master_id = None
+    dcsoc_overload_target_id = None
+    if strategy_name == "dcsoc":
+        dcsoc_master_id = get_dcsoc_master(nodes)
+        if experiment_name in {"exp08", "exp09"}:
+            effective_source = dcsoc_master_id
+        if experiment_name == "exp08":
+            eligible_overload_nodes = sorted(
+                node.node_id
+                for node in nodes.values()
+                if node.is_active and node.dcsoc_role == "core"
+            )
+            dcsoc_overload_target_id = sim.rng.choice(eligible_overload_nodes)
+            sim.dcsoc_overload_target_id = dcsoc_overload_target_id
+
+    sim.inject_message(source_id=effective_source, message_id="m1")
     sim.run()
 
     summary = sim.metrics.summarize_message("m1", total_nodes=len(sim.nodes))
+    summary["effective_source_id"] = effective_source
+    summary["dcsoc_master_id"] = dcsoc_master_id
+    summary["dcsoc_overload_target_id"] = dcsoc_overload_target_id
     summary.update(sim.get_resource_metrics())
     if enable_adaptive_trace:
         summary["adaptive_trace_rows"] = sim.adaptive_trace_rows

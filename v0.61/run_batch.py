@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+from pathlib import Path
 
 from ahbn.config import load_yaml_config
 from ahbn.control import AHBNController, AHBNParams
@@ -20,7 +23,14 @@ from ahbn.topology import (
     get_dcsoc_master,
     get_or_build_topology,
 )
-from ahbn.utils import ResultRow, save_results_csv, save_adaptive_trace_csv
+from ahbn.utils import (
+    Exp08ExecutionEvidence,
+    ResultRow,
+    current_timestamp,
+    save_adaptive_trace_csv,
+    save_exp08_evidence_csv,
+    save_results_csv,
+)
 
 
 def build_ahbn_params(cfg: dict) -> AHBNParams:
@@ -87,6 +97,11 @@ def run_single(
         edge_prob=edge_prob,
         ba_m=ba_m,
     )
+    edge_payload = ";".join(
+        f"{min(int(a), int(b))}-{max(int(a), int(b))}"
+        for a, b in sorted(graph.edges())
+    )
+    topology_identity = hashlib.sha256(edge_payload.encode("utf-8")).hexdigest()
     nodes = build_nodes_from_graph(graph)
 
     experiment_name = cfg.get("experiment", "")
@@ -204,6 +219,9 @@ def run_single(
     effective_source = message_source
     dcsoc_master_id = None
     dcsoc_overload_target_id = None
+    dcsoc_eligible_overload_nodes: list[int] = []
+    dcsoc_selected_overload_role = None
+    max_structural_obligations = None
     if strategy_name == "dcsoc":
         dcsoc_master_id = get_dcsoc_master(nodes)
         if experiment_name in {"exp08", "exp09"}:
@@ -214,8 +232,16 @@ def run_single(
                 for node in nodes.values()
                 if node.is_active and node.dcsoc_role == "core"
             )
+            dcsoc_eligible_overload_nodes = eligible_overload_nodes
             dcsoc_overload_target_id = sim.rng.choice(eligible_overload_nodes)
             sim.dcsoc_overload_target_id = dcsoc_overload_target_id
+            dcsoc_selected_overload_role = (
+                "Master" if dcsoc_overload_target_id == dcsoc_master_id else "Core"
+            )
+            max_structural_obligations = max(
+                (len(node.dcsoc_children) for node in nodes.values() if node.dcsoc_role == "core"),
+                default=0,
+            )
 
     sim.inject_message(source_id=effective_source, message_id="m1")
     sim.run()
@@ -224,6 +250,10 @@ def run_single(
     summary["effective_source_id"] = effective_source
     summary["dcsoc_master_id"] = dcsoc_master_id
     summary["dcsoc_overload_target_id"] = dcsoc_overload_target_id
+    summary["dcsoc_eligible_overload_nodes"] = dcsoc_eligible_overload_nodes
+    summary["dcsoc_selected_overload_role"] = dcsoc_selected_overload_role
+    summary["max_structural_obligations"] = max_structural_obligations
+    summary["topology_identity"] = topology_identity
     summary.update(sim.get_resource_metrics())
     if enable_adaptive_trace:
         summary["adaptive_trace_rows"] = sim.adaptive_trace_rows
@@ -336,9 +366,10 @@ def exp07(cfg: dict) -> tuple[list[ResultRow], list]:
     return rows, trace_rows
 
 
-def exp08(cfg: dict) -> tuple[list[ResultRow], list]:
+def exp08(cfg: dict) -> tuple[list[ResultRow], list, list[Exp08ExecutionEvidence]]:
     rows: list[ResultRow] = []
     trace_rows: list = []
+    evidence_rows: list[Exp08ExecutionEvidence] = []
 
     base_seed = cfg["seed"]
     runs_per_setting = cfg["runs_per_setting"]
@@ -396,11 +427,31 @@ def exp08(cfg: dict) -> tuple[list[ResultRow], list]:
                         total_forwards=summary["total_forwards"],
                     )
                 )
+                evidence_rows.append(
+                    Exp08ExecutionEvidence(
+                        experiment="exp08",
+                        strategy=strategy_name,
+                        seed=seed,
+                        overload_factor=float(overload),
+                        topology_type=topology_type,
+                        topology_param=edge_prob if topology_type == "er" else ba_m,
+                        num_nodes=num_nodes,
+                        topology_seed=seed,
+                        topology_identity=summary["topology_identity"],
+                        configured_message_source=source_id,
+                        effective_message_source=summary["effective_source_id"],
+                        dcsoc_master=summary["dcsoc_master_id"],
+                        dcsoc_eligible_overload_nodes=json.dumps(summary["dcsoc_eligible_overload_nodes"]),
+                        dcsoc_selected_overload_node=summary["dcsoc_overload_target_id"],
+                        dcsoc_selected_overload_role=summary["dcsoc_selected_overload_role"],
+                        max_structural_obligations=summary["max_structural_obligations"],
+                    )
+                )
 
                 if "adaptive_trace_rows" in summary:
                     trace_rows.extend(summary["adaptive_trace_rows"])
 
-    return rows, trace_rows
+    return rows, trace_rows, evidence_rows
 
 
 def exp09(cfg: dict) -> tuple[list[ResultRow], list]:
@@ -714,17 +765,40 @@ def main() -> None:
             print(f"Saved {trace_path}")
 
     elif experiment == "exp08":
-        rows, trace_rows = exp08(cfg)
-        path = save_results_csv(rows, "outputs/csv/exp08_results.csv")
+        rows, trace_rows, evidence_rows = exp08(cfg)
+        ts = current_timestamp()
+        path = save_results_csv(rows, f"outputs/csv/exp08_results_{ts}.csv", add_timestamp=False)
         print(f"Saved {path}")
+
+        evidence_path = save_exp08_evidence_csv(
+            evidence_rows,
+            f"outputs/csv/exp08_execution_evidence_{ts}.csv",
+            add_timestamp=False,
+        )
+        print(f"Saved {evidence_path}")
 
         if trace_rows:
             trace_path = save_adaptive_trace_csv(
                 trace_rows,
-                "outputs/csv/exp08_adaptive_trace.csv",
-                add_timestamp=True,
+                f"outputs/csv/exp08_ahbn_adaptive_trace_{ts}.csv",
+                add_timestamp=False,
             )
             print(f"Saved {trace_path}")
+        else:
+            trace_path = None
+
+        manifest = {
+            "timestamp": ts,
+            "repository": str(Path(__file__).resolve().parent),
+            "config": str(Path(args.config).resolve()),
+            "results": str(Path(path).resolve()),
+            "evidence": str(Path(evidence_path).resolve()),
+            "trace": str(Path(trace_path).resolve()) if trace_path else None,
+            "completed_runs": len(rows),
+        }
+        manifest_path = Path("outputs/csv/exp08_s3_manifest.json")
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        print(f"Saved {manifest_path}")
 
     elif experiment == "exp09":
         rows, trace_rows = exp09(cfg)
@@ -741,8 +815,6 @@ def main() -> None:
 
     elif experiment == "exp10":
         import pandas as pd
-        from pathlib import Path
-        from ahbn.utils import current_timestamp
 
         rows, trace_rows = exp10(cfg)
         out = Path("outputs/csv")
@@ -763,8 +835,6 @@ def main() -> None:
 
     elif experiment == "exp11":
         import pandas as pd
-        from pathlib import Path
-        from ahbn.utils import current_timestamp
 
         rows, trace_rows = exp11(cfg)
         out = Path("outputs/csv")
@@ -785,8 +855,6 @@ def main() -> None:
 
     elif experiment == "exp12":
         import pandas as pd
-        from pathlib import Path
-        from ahbn.utils import current_timestamp
 
         rows, trace_rows = exp12(cfg)
         out = Path("outputs/csv")

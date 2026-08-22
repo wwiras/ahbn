@@ -31,6 +31,28 @@ class ResultRow:
     total_forwards: int
 
 
+@dataclass
+class Exp08ExecutionEvidence:
+    """Observational run metadata; never consumed by dissemination logic."""
+
+    experiment: str
+    strategy: str
+    seed: int
+    overload_factor: float
+    topology_type: str
+    topology_param: float | int | None
+    num_nodes: int
+    topology_seed: int
+    topology_identity: str
+    configured_message_source: int
+    effective_message_source: int
+    dcsoc_master: int | None
+    dcsoc_eligible_overload_nodes: str
+    dcsoc_selected_overload_node: int | None
+    dcsoc_selected_overload_role: str | None
+    max_structural_obligations: int | None
+
+
 # ============================================================
 # Canonical AHBN adaptive trace
 # ============================================================
@@ -222,6 +244,21 @@ def save_adaptive_trace_csv(
         index=False,
     )
 
+    return str(output_path)
+
+
+def save_exp08_evidence_csv(
+    rows: Iterable[Exp08ExecutionEvidence],
+    output_path: str | Path,
+    add_timestamp: bool = True,
+) -> str:
+    df = pd.DataFrame([asdict(row) for row in rows])
+    output_path = Path(output_path)
+    ensure_dir(output_path.parent)
+    if add_timestamp:
+        ts = current_timestamp()
+        output_path = output_path.with_name(f"{output_path.stem}_{ts}{output_path.suffix}")
+    df.to_csv(output_path, index=False)
     return str(output_path)
 
 

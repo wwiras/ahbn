@@ -123,6 +123,8 @@ class DCSOCStrategy(ForwardingStrategy):
         # toward its assigned core.  It never expands the payload to an
         # independently sampled set of physical neighbours.
         if getattr(node, "dcsoc_role", "leaf") == "leaf":
+            if node.node_id != message.source_id:
+                return []
             parent = getattr(node, "dcsoc_parent", None)
             if parent is None or parent not in simulator.nodes:
                 return []
@@ -134,6 +136,7 @@ class DCSOCStrategy(ForwardingStrategy):
             child_id
             for child_id in getattr(node, "dcsoc_children", [])
             if child_id in simulator.nodes and simulator.nodes[child_id].is_active
+            and child_id != message.source_id
         ]
         if structural_children:
             if self.fulfill_all_structural_children:

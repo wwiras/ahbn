@@ -16,9 +16,9 @@ from matplotlib.ticker import FormatStrFormatter
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT = ROOT / "outputs/csv/final_control_statistics_s6.csv"
-PLOTDATA = ROOT / "outputs/csv/final_control_plotdata_s7.csv"
-FIGDIR = ROOT / "outputs/figures/s7"
+INPUT = ROOT / "outputs/csv/final_control_v062_s6_statistics.csv"
+PLOTDATA = ROOT / "outputs/csv/final_control_v062_s7_plotdata.csv"
+FIGDIR = ROOT / "outputs/figures/v062_s7"
 EXPECTED_S6_SHA256 = "a1f259b2a8727548639aba28f6bcfebf08ebf6d0718dc18ac10c0c79d3e63ca4"
 
 ALGORITHMS = ("Gossip", "Structured", "DC-SoC", "AHBN")
@@ -133,7 +133,7 @@ def plot_exp07(index):
         ax.set_ylabel(METRICS[metric])
         ax.set_xticks([2, 3, 4, 5, 6])
         ax.set_title(f"({chr(97 + panel)}) {METRICS[metric].replace(' (s)', '')}", loc="left", fontsize=10)
-    finish(fig, axes, "exp07_final_fanout", ncol=2)
+    finish(fig, axes, "exp07_v062_final_fanout", ncol=2)
 
 
 def plot_multi(index, experiment, conditions, xvalues, metrics, xlabel, basename):
@@ -207,9 +207,9 @@ def main():
     write_plotdata(rows)
     plot_exp07(index)
     plot_multi(index, "Exp08", [f"ch_overload_factor={x}" for x in ("1.0", "1.5", "2.0", "3.0")],
-               [1.0, 1.5, 2.0, 3.0], ("propagation_delay", "delivery_ratio"), "CH Overload Factor", "exp08_final_overload")
+               [1.0, 1.5, 2.0, 3.0], ("propagation_delay", "delivery_ratio"), "CH Overload Factor", "exp08_v062_final_overload")
     plot_multi(index, "Exp09", [f"edge_prob={x}" for x in ("0.04", "0.06", "0.08", "0.10", "0.12")],
-               [0.04, 0.06, 0.08, 0.10, 0.12], ("duplicates", "propagation_delay"), "ER Edge Probability (p)", "exp09_final_density")
+               [0.04, 0.06, 0.08, 0.10, 0.12], ("duplicates", "propagation_delay"), "ER Edge Probability (p)", "exp09_v062_final_density")
     checked = verify_plotdata(rows)
     print("S6 input SHA-256: PASS")
     print("S6 cells validated: 42/42")

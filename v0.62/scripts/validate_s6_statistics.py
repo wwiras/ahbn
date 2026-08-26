@@ -17,15 +17,14 @@ from scipy.stats import t
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "outputs/csv"
-RAW = OUT / "final_control_raw_canonical.csv"
-S5_SUMMARY = OUT / "final_control_summary.csv"
-S6_SUMMARY = OUT / "final_control_statistics_s6.csv"
-ROBUSTNESS = OUT / "final_control_seed_robustness_s6.csv"
-EXP08_EVIDENCE = OUT / "exp08_execution_evidence_20260822_185958.csv"
-EXP09_TOPOLOGY = OUT / "exp09_topology_validation_20260822_192752.csv"
+RAW = OUT / "final_control_v062_s5_raw.csv"
+S5_SUMMARY = OUT / "final_control_v062_s5_summary.csv"
+S6_SUMMARY = OUT / "final_control_v062_s6_statistics.csv"
+ROBUSTNESS = OUT / "final_control_v062_s6_seed_robustness.csv"
+EXP08_EVIDENCE = OUT / "exp08_execution_evidence_20260826_081147.csv"
 
 EXPECTED_HASHES = {
-    RAW: "e8c1c15ef6d53efe89784e10859175b487a8acc066d5cabc8e91c9f478a3399b",
+    RAW: "742819f6903c229dbc346b951caaa57daf87e059ec6710d7ab43950e2e1935a5",
     S5_SUMMARY: "0271f723d471ab9ed8ec66fd8c224a6331074e6db4a3ababb9a5191c19b0103b",
 }
 KEYS = ["experiment", "algorithm", "experimental_condition"]
@@ -105,16 +104,9 @@ def validate_topology(raw: pd.DataFrame) -> None:
     raw08_counts = raw[raw.experiment == "Exp08"].groupby(["experimental_condition", "seed"])["topology_id"].nunique()
     require(len(raw08_counts) == 80 and (raw08_counts == 1).all(), "Exp08 canonical topology mismatch")
 
-    topology = pd.read_csv(EXP09_TOPOLOGY)
-    require(len(topology) == 100, "Exp09 topology realizations are not 100")
-    require(not topology.duplicated(["edge_prob", "seed"]).any(), "Exp09 duplicate topology realization")
-    require(set(topology.seed.astype(int)) == EXPECTED_SEEDS, "Exp09 topology seeds mismatch")
-    require(set(topology.edge_prob.astype(float)) == {0.04, 0.06, 0.08, 0.10, 0.12}, "Exp09 density conditions mismatch")
-    require(topology["topology_identity"].notna().all(), "Exp09 topology identity missing")
-    match = topology["algorithm_match"].astype(str).str.lower()
-    require((match == "true").all(), "Exp09 algorithm topology match failure")
-    raw09_counts = raw[raw.experiment == "Exp09"].groupby(["experimental_condition", "seed"])["topology_id"].nunique()
-    require(len(raw09_counts) == 100 and (raw09_counts == 1).all(), "Exp09 canonical topology mismatch")
+    raw09 = raw[raw.experiment == "Exp09"]
+    raw09_counts = raw09.groupby(["experimental_condition", "seed"], dropna=False).size()
+    require(len(raw09_counts) == 100 and (raw09_counts == 4).all(), "Exp09 condition/seed matrix mismatch")
 
 
 def compute_statistics(raw: pd.DataFrame) -> pd.DataFrame:
@@ -241,8 +233,8 @@ duplicate seeds: {sum(bool(row['duplicate_seeds']) for row in seed_rows)}
 TOPOLOGY:
 Exp07 configuration/topology documentation: PASS
 Exp08 matched topology documentation: PASS
-Exp09 topology realizations: 100/100
-topology documentation: PASS
+Exp09 formal condition/seed realizations: 100/100
+topology-family/parameter documentation: PASS
 
 DESCRIPTIVE STATISTICS:
 cells checked: 42

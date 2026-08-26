@@ -18,17 +18,19 @@ from scipy.stats import t
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "outputs/csv"
-DOC = ROOT / "docs/v0.61_S5_dataaggregation.md"
-RAW_OUT = OUT / "final_control_raw_canonical.csv"
-SUMMARY_OUT = OUT / "final_control_summary.csv"
+DOC = ROOT / "docs/v0.62_S5_dataaggregation.md"
+RAW_OUT = OUT / "final_control_v062_s5_raw.csv"
+SUMMARY_OUT = OUT / "final_control_v062_s5_summary.csv"
 
 INPUTS = {
-    "exp07_results": OUT / "exp07_results_20260822_182815.csv",
-    "exp08_results": OUT / "exp08_results_20260822_185958.csv",
-    "exp08_evidence": OUT / "exp08_execution_evidence_20260822_185958.csv",
+    "exp07_results": OUT / "exp07_results_20260826_081046.csv",
+    "exp07_trace": OUT / "exp07_adaptive_trace_20260826_081047.csv",
+    "exp08_results": OUT / "exp08_results_20260826_081147.csv",
+    "exp08_trace": OUT / "exp08_ahbn_adaptive_trace_20260826_081147.csv",
+    "exp08_evidence": OUT / "exp08_execution_evidence_20260826_081147.csv",
     "exp08_manifest": OUT / "exp08_s3_manifest.json",
-    "exp09_results": OUT / "exp09_results_20260822_192752.csv",
-    "exp09_topology": OUT / "exp09_topology_validation_20260822_192752.csv",
+    "exp09_results": OUT / "exp09_results_20260826_081323.csv",
+    "exp09_trace": OUT / "exp09_adaptive_trace_20260826_081323.csv",
 }
 METRICS = ("delivery_ratio", "propagation_delay", "duplicates", "total_forwards")
 ALG = {"gossip": "Gossip", "cluster": "Structured", "dcsoc": "DC-SoC", "ahbn": "AHBN"}
@@ -73,10 +75,10 @@ def git(*args: str) -> str:
 def preexisting_status() -> str:
     """Return repository changes excluding the four artifacts owned by S5."""
     owned = {
-        "docs/v0.61_S5_dataaggregation.md",
+        "docs/v0.62_S5_dataaggregation.md",
         "scripts/aggregate_s5_final_data.py",
-        "outputs/csv/final_control_raw_canonical.csv",
-        "outputs/csv/final_control_summary.csv",
+        "outputs/csv/final_control_v062_s5_raw.csv",
+        "outputs/csv/final_control_v062_s5_summary.csv",
     }
     lines = []
     for line in git("status", "--short", "--untracked-files=all").splitlines():
@@ -145,6 +147,9 @@ def validate_results(exp: str, path: Path, expected_rows: int, expected_strategi
             "experiment": exp.upper().replace("EXP", "Exp"), "algorithm": algorithm,
             "experimental_condition": label, "seed": seed,
             "topology_type": row["topology_type"], "topology_parameter": row["topology_param"],
+            "fanout": int(float(row["fanout"])) if row["fanout"].strip() else "",
+            "overload_factor": float(row["ch_overload_factor"]) if row["ch_overload_factor"].strip() else "",
+            "density_p": float(row["topology_param"]) if exp == "exp09" else "",
             "topology_id": "", **values, "source_file": str(path.relative_to(ROOT)),
             "_condition_order": order,
         })
@@ -182,23 +187,15 @@ def validate_exp08_identity(canonical: list[dict[str, object]]) -> None:
 
 
 def validate_exp09_identity(canonical: list[dict[str, object]]) -> None:
-    topo = read_csv(INPUTS["exp09_topology"])
-    require(len(topo) == 100, f"Exp09 topology artifact expected 100 rows, got {len(topo)}")
-    mapping: dict[tuple[float, int], str] = {}
-    for row in topo:
-        key = (float(row["edge_prob"]), int(row["seed"]))
-        require(key not in mapping, f"Exp09 duplicate topology key {key}")
-        require(key[0] in {0.04, 0.06, 0.08, 0.10, 0.12} and key[1] in SEEDS, f"Exp09 unexpected topology key {key}")
-        require(row["topology_type"] == "er" and row["topology_identity"] and row["algorithm_match"] == "True", f"Exp09 invalid topology identity row: {row}")
-        require(int(row["nodes"]) > 0 and int(row["edges"]) >= 0, f"Exp09 invalid topology size: {row}")
-        mapping[key] = row["topology_identity"]
-    require(len(mapping) == 100, "Exp09 incomplete topology realization matrix")
+    """Validate only identities present in the authoritative formal results.
+
+    The v0.62 formal input list does not designate a topology-validation sidecar,
+    so no v0.61-era artifact is joined into current evidence.
+    """
     refs: Counter[tuple[float, int]] = Counter()
     for row in canonical:
         p = float(row["topology_parameter"])
         key = (p, int(row["seed"]))
-        require(key in mapping, f"Exp09 result has no topology identity: {key}")
-        row["topology_id"] = mapping[key]
         refs[key] += 1
     require(all(v == 4 for v in refs.values()) and len(refs) == 100, "Exp09 results do not reference each topology four times")
 
@@ -258,7 +255,7 @@ def report(stats: dict[str, dict[str, object]], output_hashes: dict[str, str], p
         s = stats[exp.lower()]
         lines += [f"{exp}:", f"expected rows: {expected}", f"actual rows: {s['rows']}", f"cells: {s['cells']}/{cells}", "seeds: 42–61", "missing seeds: 0", "duplicate runs: 0", "unexpected runs: 0", "metric errors: 0"]
         if exp == "Exp08": lines.append("topology/evidence identity: PASS")
-        if exp == "Exp09": lines += ["topology realizations: 100/100", "cross-algorithm topology identity: PASS"]
+        if exp == "Exp09": lines += ["formal p/seed realizations: 100/100", "four-comparator condition matrix: PASS"]
         lines += ["status: PASS", ""]
     lines += ["GLOBAL:", "expected raw rows: 840", "actual raw rows: 840", "expected cells: 42", "actual cells: 42", "all cells n=20: YES", "missing runs: 0", "duplicate runs: 0", "invalid metrics: 0", "", "CANONICAL RAW:", "rows: 840", "unique run keys: 840", "status: PASS", "", "CANONICAL SUMMARY:", "rows: 42", "all n=20: YES", "metrics aggregated:", *[f"  {m}" for m in METRICS], "statistics:", "  mean", "  sample standard deviation", "  Student-t 95% CI", "status: PASS", "", "RAW IMMUTABILITY:", "input hashes unchanged: YES", "", "SIMULATIONS EXECUTED: NO", "ALGORITHM FILES MODIFIED: NONE", "CONTROLLER PARAMETERS MODIFIED: NO", "TOPOLOGY GENERATOR MODIFIED: NO", "METRIC DEFINITIONS MODIFIED: NO", "SCIENTIFIC INTERPRETATION PERFORMED: NO", "", "git diff --check: PASS", "", "S5 FINAL STATUS: PASS"]
     return "\n".join(lines)
@@ -267,7 +264,7 @@ def report(stats: dict[str, dict[str, object]], output_hashes: dict[str, str], p
 def audit(pre: dict[str, dict[str, object]], post: dict[str, dict[str, object]], pre_status: str, terminal: str) -> str:
     hash_rows = "\n".join(f"| `{p.relative_to(ROOT)}` | {pre[k]['size']} | {pre[k]['rows'] if pre[k]['rows'] is not None else 'n/a'} | `{pre[k]['sha256']}` |" for k, p in INPUTS.items())
     output_rows = "\n".join(f"| `{p.relative_to(ROOT)}` | {p.stat().st_size} | `{sha256(p)}` |" for p in (RAW_OUT, SUMMARY_OUT))
-    return f"""# v0.61 S5 data aggregation audit
+    return f"""# v0.62 S5 data aggregation audit
 
 ## 1. Scope
 
@@ -307,7 +304,7 @@ PASS: 840 rows, 42 cells, 840 unique `experiment/algorithm/experimental_conditio
 
 ## 9. Topology/configuration identity validation
 
-Exp07 retains authoritative topology family/parameter/config association without an invented hash. Exp08 topology hashes agree across all four comparators for each factor/seed. Exp09 topology hashes join exactly by `p + seed` and are shared by all four comparator rows.
+Exp07 retains authoritative topology family/parameter/config association without an invented hash. Exp08 topology hashes agree across all four comparators for each factor/seed. Exp09 formal results contain exactly four comparator rows for every `p + seed`; no non-authoritative topology sidecar was joined.
 
 ## 10. Metric validity validation
 
@@ -327,11 +324,11 @@ For each cell/metric: sample standard deviation uses `ddof=1`; CI is `mean ± t_
 
 ## 14. Canonical raw output
 
-`outputs/csv/final_control_raw_canonical.csv`: 840 rows, 840 unique run keys, zero missing/nonfinite metrics.
+`outputs/csv/final_control_v062_s5_raw.csv`: 840 rows, 840 unique run keys, zero missing/nonfinite metrics.
 
 ## 15. Canonical summary output
 
-`outputs/csv/final_control_summary.csv`: 42 rows, every `n=20`, sum of `n` = 840, all aggregates finite, all standard deviations nonnegative, and every CI contains its mean.
+`outputs/csv/final_control_v062_s5_summary.csv`: 42 rows, every `n=20`, sum of `n` = 840, all aggregates finite, all standard deviations nonnegative, and every CI contains its mean.
 
 | Derived file | Bytes | SHA-256 |
 |---|---:|---|
@@ -388,7 +385,7 @@ def main() -> int:
     require(len(raw) == 840, f"Global expected 840 rows, got {len(raw)}")
     summary = aggregate(raw)
     validate_outputs(raw, summary)
-    raw_fields = ["experiment", "algorithm", "experimental_condition", "seed", "topology_type", "topology_parameter", "topology_id", *METRICS, "source_file"]
+    raw_fields = ["experiment", "algorithm", "experimental_condition", "seed", "fanout", "overload_factor", "density_p", "topology_type", "topology_parameter", "topology_id", *METRICS, "source_file"]
     summary_fields = ["experiment", "algorithm", "experimental_condition", "n", *[f"{m}_{suffix}" for m in METRICS for suffix in ("mean", "std", "ci95_low", "ci95_high")]]
     write_csv(RAW_OUT, raw, raw_fields)
     write_csv(SUMMARY_OUT, summary, summary_fields)

@@ -1,0 +1,144 @@
+# ============================================================
+# Stage 2 — AHBN Parameter Sensitivity
+# ============================================================
+# Purpose:
+#   Test whether the canonical AHBN controller remains sensible
+#   under reasonable one-factor-at-a-time (OFAT) parameter changes.
+#
+# Rule:
+#   Change ONE parameter at a time. All other AHBN parameters remain
+#   fixed at the canonical values below.
+#
+# This is a robustness/sensitivity experiment, NOT a search for the
+# parameter combination that maximizes performance.
+# ============================================================
+
+experiment: stage2_parameter_sensitivity
+seed: 42
+runs_per_setting: 20
+
+# Save per-controller-update traces only if detailed trace inspection is
+# required. The runner always computes compact trace-derived diagnostics
+# for the master results CSV when enable_adaptive_trace is true.
+enable_adaptive_trace: true
+save_adaptive_trace: false
+
+# ------------------------------------------------------------
+# Canonical AHBN reference point
+# ------------------------------------------------------------
+ahbn:
+  alpha: 0.3
+
+  d0: 0.5
+  l0: 0.5
+  u0: 0.5
+  c0: 0.5
+
+  w_d: -1.0
+  w_l: 1.0
+  w_u: -1.0
+  w_c: 1.0
+
+  kappa: 1.0
+  beta: 1.0
+
+  min_fanout: 2
+  max_fanout: 4
+
+  mode_threshold: 0.5
+  default_fanout: 3
+
+# ------------------------------------------------------------
+# Primary Stage-2 OFAT sensitivity sweep
+# ------------------------------------------------------------
+sensitivity:
+  alpha: [0.1, 0.3, 0.5, 0.7]
+  kappa: [0.5, 1.0, 2.0, 4.0]
+  beta: [0.5, 1.0, 1.5, 2.0]
+  mode_threshold: [0.4, 0.5, 0.6]
+
+# ------------------------------------------------------------
+# Representative environments
+# ------------------------------------------------------------
+# These are deliberately fixed stress points derived from the existing
+# experiments. They exercise different controller pressures without
+# modifying Exp07–Exp12 or the validated controller implementation.
+# ------------------------------------------------------------
+scenarios:
+
+  dense:
+    source_experiment: exp09
+    description: "Dense ER overlay / duplicate pressure"
+
+    topology_type: er
+    num_nodes: 100
+    edge_prob: 0.12
+    fanout: 4
+    num_clusters: 4
+
+    base_delay: 1.0
+    jitter: 0.2
+    message_source: 0
+    use_topology_cache: true
+
+    ch_overload_factor: 1.0
+
+    failure:
+      enabled: false
+
+    churn:
+      enabled: false
+
+  bottleneck:
+    source_experiment: exp08
+    description: "Cluster-head overload / bottleneck pressure"
+
+    topology_type: ba
+    num_nodes: 100
+    ba_m: 3
+    num_clusters: 4
+
+    base_delay: 1.0
+    jitter: 0.2
+    message_source: 0
+    use_topology_cache: true
+
+    ch_overload_factor: 3.0
+
+    failure:
+      enabled: false
+
+    churn:
+      enabled: false
+
+  churn:
+    source_experiment: exp11
+    description: "Rapid join-leave dynamics / churn pressure"
+
+    topology_type: er
+    num_nodes: 100
+    edge_prob: 0.08
+    fanout: 3
+    num_clusters: 4
+
+    base_delay: 1.0
+    jitter: 0.2
+    message_source: 0
+    use_topology_cache: true
+
+    ch_overload_factor: 1.0
+    churn_rate: 0.30
+
+    failure:
+      enabled: false
+
+    churn:
+      enabled: true
+      start_time: 2.0
+      interval: 1.5
+      num_cycles: 4
+      down_time: 2.0
+      target_fraction: 0.30
+      min_targets: 1
+      allow_cluster_heads: true
+      permanent_leave: false

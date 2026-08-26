@@ -1,0 +1,82 @@
+# ============================================================
+# Stage 3.3 — DC-SoC Baseline Smoke Test
+# ============================================================
+#
+# Purpose:
+#   Validate the external density-clustered hybrid comparator
+#   independently of canonical AHBN.
+#
+# This configuration does NOT modify or tune AHBN.
+# ============================================================
+
+experiment: stage3_dcsoc
+
+seed: 42
+
+# ------------------------------------------------------------
+# Network
+# ------------------------------------------------------------
+
+num_nodes: 100
+
+topology_type: er
+
+edge_prob: 0.08
+
+use_topology_cache: true
+
+# ------------------------------------------------------------
+# Simulation
+# ------------------------------------------------------------
+
+base_delay: 1.0
+
+jitter: 0.2
+
+message_source: 0
+
+# Existing experiment-level fanout retained for compatibility.
+fanout: 3
+
+# Retained because existing experiment configurations expect it.
+# DC-SoC determines its actual number of clusters using DBSCAN.
+num_clusters: 4
+
+ch_overload_factor: 1.0
+
+# ------------------------------------------------------------
+# DC-SoC-inspired baseline
+# ------------------------------------------------------------
+#
+# IMPORTANT:
+#   Cross-check these four values against the locked Stage 3.2
+#   specification before freezing the baseline.
+#
+#   The code itself does not tune these parameters.
+# ------------------------------------------------------------
+
+dcsoc:
+
+  # DBSCAN hop-distance radius.
+  eps: 2.0
+
+  # Minimum DBSCAN neighborhood density.
+  min_samples: 3
+
+  # Maximum total forwarding budget per node.
+  fanout: 3
+
+  # Maximum portion of a cluster head's fanout reserved for
+  # structured inter-cluster forwarding.
+  inter_fanout: 1
+
+# ------------------------------------------------------------
+# Stage 3.3 smoke test:
+# no failure or churn yet.
+# ------------------------------------------------------------
+
+failure:
+  enabled: false
+
+churn:
+  enabled: false

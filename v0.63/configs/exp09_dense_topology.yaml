@@ -1,0 +1,47 @@
+experiment: exp09
+seed: 42
+runs_per_setting: 20
+
+num_nodes: 100
+topology_type: er
+edge_probs: [0.04, 0.06, 0.08, 0.10, 0.12]
+
+num_clusters: 4
+
+base_delay: 1.0
+jitter: 0.2
+message_source: 0
+use_topology_cache: true
+
+strategies:
+  - gossip
+  - cluster
+  - dcsoc
+  - ahbn
+
+# Frozen S2 DC-SoC comparator parameters. These do not constrain Gossip.
+dcsoc:
+  eps: 2.0
+  min_samples: 3
+
+ahbn:
+  alpha: 0.3
+
+  d0: 0.0
+  l0: 0.0
+  u0: 0.0
+  c0: 0.0
+
+  w_d: -1.0
+  w_l: 1.0
+  w_u: 1.0
+  w_c: 1.0
+
+  kappa: 1.0
+  beta: 1.0
+
+  min_fanout: 2
+  max_fanout: 6
+
+  mode_threshold: 0.5
+  default_fanout: 3

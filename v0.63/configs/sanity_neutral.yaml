@@ -1,0 +1,60 @@
+experiment: exp12
+seed: 42
+runs_per_setting: 1
+num_nodes: 20
+topology_type: er
+edge_prob: 0.08
+use_topology_cache: false
+message_source: 0
+base_delay: 1.0
+jitter: 0.2
+fanout: 3
+num_clusters: 4
+strategies:
+- ahbn
+resource_scenarios:
+- balanced
+failure:
+  enabled: false
+churn:
+  enabled: false
+resources:
+  classes:
+    strong:
+      processing_delay: 0.15
+      capacity_score: 1.8
+    medium:
+      processing_delay: 0.5
+      capacity_score: 1.0
+    weak:
+      processing_delay: 1.0
+      capacity_score: 0.55
+  profiles:
+    balanced:
+      strong: 0.25
+      medium: 0.5
+      weak: 0.25
+    moderate_heterogeneity:
+      strong: 0.2
+      medium: 0.45
+      weak: 0.35
+    weak_heavy:
+      strong: 0.15
+      medium: 0.35
+      weak: 0.5
+ahbn:
+  alpha: 0.3
+  d0: 0.5
+  l0: 0.5
+  u0: 0.5
+  c0: 0.5
+  w_d: -1.0
+  w_l: 1.0
+  w_u: -1.0
+  w_c: 1.0
+  kappa: 1.0
+  beta: 1.0
+  min_fanout: 2
+  max_fanout: 4
+  mode_threshold: 0.5
+  default_fanout: 3

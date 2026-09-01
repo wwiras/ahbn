@@ -46,6 +46,27 @@ echo "Command: bash scripts/run_stage4_${EXPERIMENT}_v063_${RUN_KIND}.sh"
 echo "Python: ${PYTHON}"
 echo "Config: ${CONFIG}"
 echo "Output directory: ${OUTPUT_ROOT}"
+if [ "${EXPERIMENT}" = exp09 ]; then
+  "${PYTHON}" - "${CONFIG}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+cfg = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))
+strategies = list(cfg["strategies"])
+densities = [float(value) for value in cfg["edge_probs"]]
+runs = int(cfg["runs_per_setting"])
+print("EXP09 DESIGN")
+print("project root: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63")
+print("Python: /Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python")
+print(f"topology: {cfg['topology_type']}")
+print(f"N: {cfg['num_nodes']}")
+print(f"density levels: {densities}")
+print(f"strategies: {strategies}")
+print(f"runs per cell: {runs}")
+print(f"expected run count: {len(strategies) * len(densities) * runs}")
+PY
+fi
 if [ "${EXPERIMENT}:${RUN_KIND}" = exp08:formal ]; then
   "${PYTHON}" - "${CONFIG}" <<'PY'
 import sys
@@ -66,6 +87,11 @@ PY
 fi
 cd "${OUTPUT_ROOT}"
 "${PYTHON}" "${PROJECT_ROOT}/run_batch.py" --config "${CONFIG}"
-"${PYTHON}" "${PROJECT_ROOT}/scripts/analyze_stage4_v063.py" \
-  --root "${OUTPUT_ROOT}" --experiment "${EXPERIMENT}"
+if [ "${EXPERIMENT}" = exp09 ]; then
+  "${PYTHON}" "${PROJECT_ROOT}/scripts/validate_stage4_exp09_v063.py" \
+    --root "${OUTPUT_ROOT}" --config "${CONFIG}"
+else
+  "${PYTHON}" "${PROJECT_ROOT}/scripts/analyze_stage4_v063.py" \
+    --root "${OUTPUT_ROOT}" --experiment "${EXPERIMENT}"
+fi
 echo "TECHNICAL VALIDATION: PASS"

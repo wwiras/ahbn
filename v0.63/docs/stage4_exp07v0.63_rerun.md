@@ -219,6 +219,74 @@ EXP07 FREEZE: PASS
 ```
 
 The dataset is complete, the adaptive trace is canonical, the statistics are reproducible, and the mixed outcome is scientifically interpretable. No Exp07 rerun is warranted. Exp07 is ready to freeze; do not run Exp08 until user review.
+
+## Formal Figure Generation
+
+- Dataset: `outputs/stage4_exp07_v063-20260901_091610`
+- Python: `/Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python`
+- Plotter: `scripts/plot_stage4_exp07_v063.py`
+- Wrapper: `scripts/run_stage4_exp07_v063_plots.sh`
+- v0.62 references inspected: `scripts/plot_exp07_publication.py`, `scripts/plot_exp07_side_by_side.py`, and the Exp07 implementation in `scripts/plot_results.py`
+
+The v0.63 plotter reads `exp07_v063_summary.csv` and `exp07_v063_ahbn_adaptive_summary.csv`. Fixed Gossip is plotted across fanouts 2–6 with Student-t 95% CI error bars. AHBN is represented as one adaptive horizontal mean and CI band, not as a fabricated fixed-fanout curve or marker.
+
+## Figure Generation Command
+
+```bash
+cd /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63
+bash scripts/run_stage4_exp07_v063_plots.sh \
+    outputs/stage4_exp07_v063-20260901_091610
+```
+
+## Figure Generation Terminal Output
+
+```text
+EXP07 FORMAL FIGURE GENERATION
+dataset: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610
+python: /Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python
+Generated figure: .../exp07_v063_delivery.png
+Generated figure: .../exp07_v063_delay.png
+Generated figure: .../exp07_v063_duplicates.png
+Generated figure: .../exp07_v063_forwards.png
+Generated figure: .../exp07_v063_ahbn_fanout_distribution.png
+Generated figure: .../exp07_v063_ahbn_mode_distribution.png
+FIGURE GENERATION EXIT CODE: 0
+```
+
+The complete stdout/stderr record is stored at `outputs/stage4_exp07_v063-20260901_091610/exp07_v063_figure_generation_terminal.log`.
+
+## Generated Figures
+
+- `outputs/stage4_exp07_v063-20260901_091610/exp07_v063_delivery.png`
+- `outputs/stage4_exp07_v063-20260901_091610/exp07_v063_delay.png`
+- `outputs/stage4_exp07_v063-20260901_091610/exp07_v063_duplicates.png`
+- `outputs/stage4_exp07_v063-20260901_091610/exp07_v063_forwards.png`
+- `outputs/stage4_exp07_v063-20260901_091610/exp07_v063_ahbn_fanout_distribution.png`
+- `outputs/stage4_exp07_v063-20260901_091610/exp07_v063_ahbn_mode_distribution.png`
+
+## Figure Validation
+
+- Four primary metric figures generated and non-empty: PASS
+- Student-t 95% CI error bars and AHBN CI bands visible: PASS
+- Axes, units, labels, legends, and treatments readable: PASS
+- AHBN shown as one adaptive reference without a fixed-fanout x-position: PASS
+- Gossip delivery rises and delay falls with fanout: PASS
+- Gossip duplicates and forwarding transmissions rise with fanout: PASS
+- AHBN aggregate reference appears at the Gossip-f3 operating region: PASS
+- AHBN fanout distribution shows f2=6.35%, f3=93.65%, f4/f5/f6=0%: PASS
+- Optional AHBN mode distribution generated: PASS
+- No clipping, missing treatment, or impossible plotted value observed: PASS
+- Raw formal results unchanged: YES
+- Exp07 simulation rerun: NO
+
+```text
+FIGURE SCRIPT: PASS
+FIGURE GENERATION: PASS
+FIGURE VALIDATION: PASS
+REPRODUCIBILITY: PASS
+EXP07 RERUN REQUIRED: NO
+EXP07 PACKAGE COMPLETE: YES
+```
 Stage 4 exp07 ControlSim v0.63 smoke
 Python: /Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python
 Config: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_090457/exp07_fanout_smoke.yaml
@@ -345,3 +413,13 @@ Saved /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-
 Saved /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610/exp07_v063_figure_data.csv
 Saved /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610/exp07_v063_analysis.txt
 ANALYSIS EXIT CODE: 0
+EXP07 FORMAL FIGURE GENERATION
+dataset: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610
+python: /Users/wwiras/Documents/src/AHBNProj/venv0.6/bin/python
+Generated figure: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610/exp07_v063_delivery.png
+Generated figure: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610/exp07_v063_delay.png
+Generated figure: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610/exp07_v063_duplicates.png
+Generated figure: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610/exp07_v063_forwards.png
+Generated figure: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610/exp07_v063_ahbn_fanout_distribution.png
+Generated figure: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63/outputs/stage4_exp07_v063-20260901_091610/exp07_v063_ahbn_mode_distribution.png
+FIGURE GENERATION EXIT CODE: 0

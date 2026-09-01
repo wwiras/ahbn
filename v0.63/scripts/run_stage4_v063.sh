@@ -46,6 +46,24 @@ echo "Command: bash scripts/run_stage4_${EXPERIMENT}_v063_${RUN_KIND}.sh"
 echo "Python: ${PYTHON}"
 echo "Config: ${CONFIG}"
 echo "Output directory: ${OUTPUT_ROOT}"
+if [ "${EXPERIMENT}:${RUN_KIND}" = exp08:formal ]; then
+  "${PYTHON}" - "${CONFIG}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+cfg = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))
+strategies = list(cfg["strategies"])
+overloads = [float(value) for value in cfg["ch_overload_factor"]]
+runs = int(cfg["runs_per_setting"])
+print("EXP08 FORMAL RUN")
+print(f"project root: /Users/wwiras/Documents/src/AHBNProj/ahbn/v0.63")
+print(f"treatments: {strategies}")
+print(f"overload factors: {overloads}")
+print(f"runs per cell: {runs}")
+print(f"expected run count: {len(strategies) * len(overloads) * runs}")
+PY
+fi
 cd "${OUTPUT_ROOT}"
 "${PYTHON}" "${PROJECT_ROOT}/run_batch.py" --config "${CONFIG}"
 "${PYTHON}" "${PROJECT_ROOT}/scripts/analyze_stage4_v063.py" \

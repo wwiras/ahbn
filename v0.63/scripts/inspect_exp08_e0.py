@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only E0 integrity inspection for the frozen v0.61 Exp08 workflow."""
+"""Read-only E0 integrity inspection for the frozen v0.61 Exp08 workflow.
+
+Historical/superseded gate; not authoritative for final v0.63 S5 validation.
+"""
 from __future__ import annotations
 import inspect
 import sys

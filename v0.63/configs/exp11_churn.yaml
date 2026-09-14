@@ -1,3 +1,5 @@
+# Historical/legacy ControlSim scenario; not the retained GKE Exp11 execution
+# used for final evidence and not authoritative for final canonical S5.
 experiment: exp11
 
 seed: 42

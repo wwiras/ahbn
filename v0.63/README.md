@@ -226,6 +226,15 @@ These values form the reference configuration used during controller validation 
 
 They are not intended to be continuously tuned during the final comparative experiments.
 
+For the final canonical S5 actuator, the controller's **requested** fanout is
+drawn from `{2, 3, 4, 5, 6}` and defaults to `3`. The retained
+`max_fanout: 4` above describes the earlier bounded configuration; in the
+current ControlSim execution path, the requested value is separately limited
+to an effective budget of at most `4` before target selection. The realized
+target count may be lower again when fewer eligible neighbours are available.
+Thus the effective or realized limit does not redefine the canonical S5
+requested-fanout range.
+
 ---
 
 # 4. Experimental Development Plan

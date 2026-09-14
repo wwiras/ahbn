@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Focused pre-execution regression gate for the v0.61 Exp08 workflow."""
+"""Focused pre-execution regression gate for the v0.61 Exp08 workflow.
+
+Historical/superseded gate; not authoritative for final v0.63 S5 validation.
+"""
 from __future__ import annotations
 import hashlib, inspect, sys
 from dataclasses import fields

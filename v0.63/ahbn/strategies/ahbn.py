@@ -55,22 +55,20 @@ class AHBNStrategy(ForwardingStrategy):
         Obtain the forwarding budget selected by AHBN.
 
         If adaptive fanout is enabled:
-            use node.control.fanout.
+            use the controller-selected node.control.fanout directly.
 
         Otherwise:
             use the configured default fanout.
+
+        AHBNStrategy applies no additional fanout cap. The downstream
+        dissemination strategy realizes at most min(k, |N_e|), where N_e
+        is the eligible target set.
         """
 
         if self.adaptive_fanout:
-            return max(
-                2,
-                min(4, int(node.control.fanout)),
-            )
+            return int(node.control.fanout)
 
-        return max(
-            2,
-            min(4, int(self.default_fanout)),
-        )
+        return int(self.default_fanout)
 
     # --------------------------------------------------------
     # Utility

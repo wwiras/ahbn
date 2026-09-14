@@ -66,25 +66,58 @@ def test_default_and_all_supported_requested_gears() -> None:
     assert {_requested_fanout(score) for score, _ in EXACT_CASES} == {2, 3, 4, 5, 6}
 
 
-@pytest.mark.parametrize(("requested", "effective"), ((6, 4), (3, 3)))
-def test_effective_fanout_uses_production_clamp(requested: int, effective: int) -> None:
+@pytest.mark.parametrize("requested", (2, 3, 4, 5, 6))
+def test_effective_fanout_preserves_controller_selection(requested: int) -> None:
     strategy = AHBNStrategy()
     node = SimpleNamespace(control=SimpleNamespace(fanout=requested))
-    assert strategy._get_effective_fanout(node) == effective
+    assert strategy._get_effective_fanout(node) == requested
 
 
-@pytest.mark.parametrize(("requested", "realized"), ((6, 4), (3, 3)))
-def test_gossip_realization_obeys_effective_fanout(requested: int, realized: int) -> None:
+def test_gossip_realization_is_limited_by_eligible_neighbors() -> None:
     strategy = AHBNStrategy()
     node = SimpleNamespace(
         node_id=0,
-        neighbors=[1, 2, 3, 4, 5, 6],
-        control=SimpleNamespace(fanout=requested, mode="gossip"),
+        neighbors=[1, 2, 3],
+        control=SimpleNamespace(fanout=6, mode="gossip"),
     )
     simulator = SimpleNamespace(
         nodes={peer_id: SimpleNamespace(is_active=True) for peer_id in node.neighbors},
         rng=random.Random(42),
     )
     targets = strategy.select_targets(node, SimpleNamespace(), simulator)
-    assert len(targets) == realized
+    assert len(targets) == len(node.neighbors)
     assert set(targets).issubset(node.neighbors)
+
+
+def _structured_head_targets(score: float, member_count: int) -> list[int]:
+    fanout = _requested_fanout(score)
+    members = list(range(1, member_count + 1))
+    gateway = member_count + 1
+    node = SimpleNamespace(
+        node_id=0,
+        cluster_id=10,
+        is_cluster_head=True,
+        gateway_neighbors=[gateway],
+        control=SimpleNamespace(fanout=fanout, mode="cluster"),
+    )
+    simulator = SimpleNamespace(
+        nodes={
+            target_id: SimpleNamespace(is_active=True)
+            for target_id in members + [gateway]
+        },
+        cluster_manager=SimpleNamespace(
+            get_cluster_members=lambda cluster_id, exclude: members,
+        ),
+    )
+    return AHBNStrategy().select_targets(node, SimpleNamespace(), simulator)
+
+
+@pytest.mark.parametrize(("score", "expected"), ((0.90, 5), (1.50, 6)))
+def test_structured_head_preserves_controller_fanout(score: float, expected: int) -> None:
+    targets = _structured_head_targets(score, member_count=6)
+    assert len(targets) == expected
+
+
+def test_structured_head_realization_is_limited_by_eligible_targets() -> None:
+    targets = _structured_head_targets(1.50, member_count=2)
+    assert len(targets) == 3
